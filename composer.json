@@ -1,0 +1,42 @@
+{
+    "name": "survos/search-bundle",
+    "description": "Field-driven Symfony UX search adapters, including SQLite FTS5 and PostgreSQL BM25 backends.",
+    "type": "symfony-bundle",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "doctrine/dbal": "^4.3",
+        "doctrine/doctrine-bundle": "^2.14|^3.0",
+        "mezcalito/ux-search": "^0.7",
+        "survos/field-bundle": "^2.0",
+        "symfony/config": "^8.1",
+        "symfony/console": "^8.1",
+        "symfony/dependency-injection": "^8.1",
+        "symfony/http-kernel": "^8.1",
+        "symfony/options-resolver": "^8.1",
+        "symfony/service-contracts": "^3.6",
+        "symfony/string": "^8.1",
+        "symfony/ux-twig-component": "^3.0",
+        "twig/twig": "^3.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Survos\\SearchBundle\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Survos\\SearchBundle\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "symfony": {
+            "allow-contrib": false,
+            "require": "^8.1"
+        }
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^12.0"
+    }
+}

@@ -1,0 +1,7 @@
+/vendor/
+composer.lock
+/tests/cache
+/tests/project-dir
+# coverage
+/html
+.phpstan.cache
