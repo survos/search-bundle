@@ -8,6 +8,7 @@
         "doctrine/dbal": "^4.3",
         "doctrine/doctrine-bundle": "^2.14|^3.0",
         "mezcalito/ux-search": "*",
+        "survos/kit-bundle": "^2.0",
         "survos/field-bundle": "^2.0",
         "symfony/config": "^8.1",
         "symfony/console": "^8.1",

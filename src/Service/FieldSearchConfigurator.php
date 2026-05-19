@@ -22,30 +22,42 @@ final readonly class FieldSearchConfigurator
         private array $defaultHitsPerPageChoices = [12, 24, 48],
     ) {}
 
-    public function configure(SearchInterface $search, string $fieldClass): void
+    /**
+     * @param string[] $allowedFields
+     */
+    public function configure(SearchInterface $search, string $fieldClass, array $allowedFields = [], ?string $columnPrefix = null): void
     {
         $descriptors = $this->fieldReader->getDescriptors($fieldClass);
+        $allowedMap = array_flip($allowedFields);
 
         $searchable = [];
         $facetColumns = [];
         $sortColumns = [];
 
         foreach ($descriptors as $descriptor) {
+            if (!$descriptor->visible) {
+                continue;
+            }
+
+            if ($allowedMap !== [] && !isset($allowedMap[$descriptor->name])) {
+                continue;
+            }
+
             if ($descriptor->searchable) {
-                $searchable[] = $descriptor->name;
+                $searchable[] = $this->column($descriptor->name, $columnPrefix);
             }
 
             if ($descriptor->sortable) {
-                $sortColumns[$descriptor->name] = $descriptor->name;
+                $sortColumns[$descriptor->name] = $this->column($descriptor->name, $columnPrefix);
                 $label = $descriptor->getFallbackLabel();
-                $search->addAvailableSort($descriptor->name . ':asc', $label . ' A-Z');
-                $search->addAvailableSort($descriptor->name . ':desc', $label . ' Z-A');
+                $search->addAvailableSort($this->column($descriptor->name, $columnPrefix) . ':asc', $label . ' A-Z');
+                $search->addAvailableSort($this->column($descriptor->name, $columnPrefix) . ':desc', $label . ' Z-A');
             }
 
             if ($descriptor->facet || $this->shouldExposeFacet($descriptor)) {
                 $component = $this->componentFor($descriptor);
                 $search->addFacet($descriptor->name, $descriptor->getFallbackLabel(), $component);
-                $facetColumns[$descriptor->name] = $descriptor->name;
+                $facetColumns[$descriptor->name] = $this->column($descriptor->name, $columnPrefix);
             }
         }
 
@@ -60,6 +72,11 @@ final readonly class FieldSearchConfigurator
         ];
 
         $search->setAdapterParameters($adapterParameters);
+    }
+
+    private function column(string $field, ?string $prefix): string
+    {
+        return $prefix === null ? $field : $prefix . $field;
     }
 
     private function shouldExposeFacet(FieldDescriptor $descriptor): bool

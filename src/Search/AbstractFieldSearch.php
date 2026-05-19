@@ -31,10 +31,15 @@ abstract class AbstractFieldSearch extends AbstractSearch
      */
     public function build(array $options = []): void
     {
+        $this->getFieldSearchConfigurator()->configure($this, $this->getFieldClass($options));
+    }
+
+    protected function getFieldSearchConfigurator(): FieldSearchConfigurator
+    {
         if (!$this->fieldSearchConfigurator instanceof FieldSearchConfigurator) {
             throw new \LogicException(sprintf('The "%s" service was not injected. Is this search class registered as a Symfony service?', FieldSearchConfigurator::class));
         }
 
-        $this->fieldSearchConfigurator->configure($this, $this->getFieldClass($options));
+        return $this->fieldSearchConfigurator;
     }
 }

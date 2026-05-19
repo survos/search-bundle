@@ -1,0 +1,24 @@
+{% extends "@SurvosTabler/layout/base.html.twig" %}
+
+{% block title %}{{ descriptor.label }} Search{% endblock %}
+
+{% block page_content %}
+    <div class="container-xl py-3">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <div>
+                <h1 class="mb-0">{{ descriptor.label }} Search</h1>
+                <div class="text-muted small">
+                    <code>{{ descriptor.class }}</code>
+                </div>
+            </div>
+            <a href="{{ path('survos_entity_dashboard', {code: descriptor.code}) }}" class="btn btn-outline-secondary">
+                Back to overview
+            </a>
+        </div>
+
+        <twig:Mezcalito:UxSearch:Layout
+            :name="search.name"
+            :options="{ hitTemplate: search.hitTemplate }"
+        />
+    </div>
+{% endblock %}
