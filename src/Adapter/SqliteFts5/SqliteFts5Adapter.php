@@ -64,8 +64,9 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         $params['offset'] = $offset;
 
         $sql = sprintf(
-            'SELECT %s, bm25(f) AS _score FROM %s d JOIN %s f ON %s%s %s LIMIT :limit OFFSET :offset',
+            'SELECT %s, bm25(%s) AS _score FROM %s d JOIN %s f ON %s%s %s LIMIT :limit OFFSET :offset',
             $this->selectList($this->connection, $search->getResolvedAdapterParameter('selectColumns')),
+            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable')),
             $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')),
             $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable')),
             $search->getResolvedAdapterParameter('joinExpression'),

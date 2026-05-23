@@ -20,6 +20,7 @@ use Survos\SearchBundle\Compiler\AutoEntitySearchPass;
 use Survos\SearchBundle\DependencyInjection\UxSearchAdapterPass;
 use Survos\SearchBundle\Registry\UxSearchRegistry;
 use Survos\SearchBundle\Service\FieldSearchConfigurator;
+use Survos\SearchBundle\Menu\SearchMenuSubscriber;
 use Survos\SearchBundle\Twig\SearchExtension;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -79,6 +80,10 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
             ->set(SearchCreateCommand::class)
                 ->arg('$projectDir', '%kernel.project_dir%')
                 ->public();
+
+        if (class_exists(\Survos\TablerBundle\Menu\AbstractAdminMenuSubscriber::class)) {
+            $services->set(SearchMenuSubscriber::class)->autowire()->autoconfigure();
+        }
     }
 
     public function build(ContainerBuilder $container): void
@@ -86,7 +91,8 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
         parent::build($container);
 
         if (class_exists(AdapterProvider::class)) {
-            $container->addCompilerPass(new AutoEntitySearchPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, 100);
+            // EntityMetaPass runs at priority 0; AutoEntitySearchPass must run after it
+            $container->addCompilerPass(new AutoEntitySearchPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -10);
             $container->addCompilerPass(new UxSearchAdapterPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -100);
         }
         $this->addRouteLoaderCompilerPass($container);

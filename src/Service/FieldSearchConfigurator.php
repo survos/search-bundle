@@ -83,7 +83,8 @@ final readonly class FieldSearchConfigurator
     {
         $widget = $descriptor->resolvedWidget();
 
-        return $descriptor->filterable && in_array($widget, [Widget::Select, Widget::Boolean, Widget::Range, Widget::Date], true);
+        // Widget::Boolean excluded: PostgreSQL rejects min(boolean) in DoctrineAdapter's stats query.
+        return $descriptor->filterable && in_array($widget, [Widget::Select, Widget::Range, Widget::Date], true);
     }
 
     private function componentFor(FieldDescriptor $descriptor): string

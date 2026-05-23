@@ -7,10 +7,12 @@ namespace Survos\SearchBundle\Compiler;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping\Column;
 use Doctrine\Persistence\ManagerRegistry;
+use Mezcalito\UxSearchBundle\Search\SearchProvider;
 use Survos\FieldBundle\Registry\EntityMetaRegistry;
 use Survos\SearchBundle\Model\UxSearchDescriptor;
 use Survos\SearchBundle\Registry\UxSearchRegistry;
 use Survos\SearchBundle\Search\AutoEntitySearch;
+use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
@@ -46,12 +48,21 @@ final class AutoEntitySearchPass implements CompilerPassInterface
         }
 
         $registryDefinition = $container->getDefinition(EntityMetaRegistry::class);
-        $entityDescriptors = $registryDefinition->getArgument('$descriptors');
+        try {
+            $entityDescriptors = $registryDefinition->getArgument('$descriptors');
+        } catch (\OutOfBoundsException) {
+            try {
+                $entityDescriptors = $registryDefinition->getArgument(0);
+            } catch (\OutOfBoundsException) {
+                return;
+            }
+        }
         if (!is_array($entityDescriptors)) {
-            $entityDescriptors = $registryDefinition->getArgument(0);
+            return;
         }
 
         $uxDescriptors = [];
+        $newSearches = [];
         foreach ($entityDescriptors as $descriptorDefinition) {
             if (!$descriptorDefinition instanceof Definition) {
                 continue;
@@ -85,6 +96,7 @@ final class AutoEntitySearchPass implements CompilerPassInterface
                     ])
                     ->addTag('kernel.reset', ['method' => 'reset'])
             );
+            $newSearches[$code] = new Reference($serviceId);
 
             $uxDescriptors[] = new Definition(UxSearchDescriptor::class, [
                 '$class' => $class,
@@ -98,6 +110,14 @@ final class AutoEntitySearchPass implements CompilerPassInterface
 
         $container->getDefinition(UxSearchRegistry::class)
             ->setArgument('$descriptors', $uxDescriptors);
+
+        // RegisterSearchPass (TYPE_BEFORE_OPTIMIZATION, priority 0) already ran — patch SearchProvider directly.
+        if ($newSearches !== [] && $container->hasDefinition(SearchProvider::class)) {
+            $providerDef = $container->getDefinition(SearchProvider::class);
+            $existingArg = $providerDef->getArgument('$searches');
+            $existing = $existingArg instanceof IteratorArgument ? $existingArg->getValues() : [];
+            $providerDef->setArgument('$searches', new IteratorArgument(array_merge($existing, $newSearches)));
+        }
     }
 
     /**
