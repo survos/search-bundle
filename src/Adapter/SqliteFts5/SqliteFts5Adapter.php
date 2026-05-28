@@ -35,6 +35,8 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             'where' => null,
             'params' => [],
             'maxFacetValues' => 100,
+            'facetCountTable' => null,
+            'facetValueTable' => null,
         ]);
 
         $resolver->setRequired(['table', 'ftsTable']);
@@ -49,6 +51,8 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         $resolver->setAllowedTypes('where', ['null', 'string']);
         $resolver->setAllowedTypes('params', 'array');
         $resolver->setAllowedTypes('maxFacetValues', 'int');
+        $resolver->setAllowedTypes('facetCountTable', ['null', 'string']);
+        $resolver->setAllowedTypes('facetValueTable', ['null', 'string']);
     }
 
     public function search(Query $query, SearchInterface $search): ResultSet
@@ -63,13 +67,15 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         $params['limit'] = $limit;
         $params['offset'] = $offset;
 
+        $usesFts = $query->getQueryString() !== '';
+        $score = $usesFts ? sprintf('bm25(%s)', $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable'))) : '0';
+
         $sql = sprintf(
-            'SELECT %s, bm25(%s) AS _score FROM %s d JOIN %s f ON %s%s %s LIMIT :limit OFFSET :offset',
+            'SELECT %s, %s AS _score FROM %s%s%s %s LIMIT :limit OFFSET :offset',
             $this->selectList($this->connection, $search->getResolvedAdapterParameter('selectColumns')),
-            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable')),
-            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')),
-            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable')),
-            $search->getResolvedAdapterParameter('joinExpression'),
+            $score,
+            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
+            $this->joinClause($search, $usesFts),
             $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
             $orderBy,
         );
@@ -81,10 +87,9 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         );
 
         $countSql = sprintf(
-            'SELECT COUNT(*) FROM %s d JOIN %s f ON %s%s',
-            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')),
-            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable')),
-            $search->getResolvedAdapterParameter('joinExpression'),
+            'SELECT COUNT(*) FROM %s%s%s',
+            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
+            $this->joinClause($search, $usesFts),
             $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
         );
 
@@ -155,15 +160,36 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             $this->applyFilters($query, $search, $where, $params, $facet->getProperty());
             $params['maxFacetValues'] = $search->getResolvedAdapterParameter('maxFacetValues');
 
-            $sql = sprintf(
-                'SELECT %s AS value, COUNT(*) AS total FROM %s d JOIN %s f ON %s%s GROUP BY %s ORDER BY total DESC LIMIT :maxFacetValues',
-                $column,
-                $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')),
-                $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable')),
-                $search->getResolvedAdapterParameter('joinExpression'),
-                $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
-                $column,
-            );
+            $countTable = $search->getResolvedAdapterParameter('facetCountTable');
+            $valueTable = $search->getResolvedAdapterParameter('facetValueTable');
+            if (is_string($countTable) && !$this->hasActiveFilters($query, $facet->getProperty()) && $query->getQueryString() === '') {
+                $sql = sprintf(
+                    'SELECT value, total FROM %s WHERE field = :facetField ORDER BY total DESC LIMIT :maxFacetValues',
+                    $this->connection->quoteIdentifier($countTable),
+                );
+                $params['facetField'] = $facet->getProperty();
+            } elseif (is_string($valueTable)) {
+                $usesFts = $query->getQueryString() !== '';
+                $params['facetField'] = $facet->getProperty();
+                $where[] = 'fv.field = :facetField';
+                $sql = sprintf(
+                    'SELECT fv.value AS value, COUNT(*) AS total FROM %s fv JOIN %s ON d.rowid = fv.item_rowid%s%s GROUP BY fv.value ORDER BY total DESC LIMIT :maxFacetValues',
+                    $this->connection->quoteIdentifier($valueTable),
+                    $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
+                    $this->joinClause($search, $usesFts),
+                    ' WHERE ' . implode(' AND ', $where),
+                );
+            } else {
+                $usesFts = $query->getQueryString() !== '';
+                $sql = sprintf(
+                    'SELECT %s AS value, COUNT(*) AS total FROM %s%s%s GROUP BY %s ORDER BY total DESC LIMIT :maxFacetValues',
+                    $column,
+                    $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
+                    $this->joinClause($search, $usesFts),
+                    $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
+                    $column,
+                );
+            }
 
             $values = [];
             foreach ($this->connection->executeQuery($sql, $params)->fetchAllAssociative() as $row) {
@@ -198,13 +224,13 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             $where = $this->baseWhere($query, $search, $params);
             $this->applyFilters($query, $search, $where, $params, $facet->getProperty());
 
+            $usesFts = $query->getQueryString() !== '';
             $sql = sprintf(
-                'SELECT MIN(%s) AS min_value, MAX(%s) AS max_value FROM %s d JOIN %s f ON %s%s',
+                'SELECT MIN(%s) AS min_value, MAX(%s) AS max_value FROM %s%s%s',
                 $column,
                 $column,
-                $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')),
-                $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable')),
-                $search->getResolvedAdapterParameter('joinExpression'),
+                $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
+                $this->joinClause($search, $usesFts),
                 $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
             );
             $row = $this->connection->executeQuery($sql, $params)->fetchAssociative();
@@ -225,5 +251,41 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
     private function escapeMatchQuery(string $query): string
     {
         return str_replace('"', '""', trim($query));
+    }
+
+    private function joinClause(SearchInterface $search, bool $usesFts): string
+    {
+        if (!$usesFts) {
+            return '';
+        }
+
+        return sprintf(
+            ' JOIN %s f ON %s',
+            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable')),
+            $search->getResolvedAdapterParameter('joinExpression'),
+        );
+    }
+
+    private function hasActiveFilters(Query $query, ?string $skipProperty = null): bool
+    {
+        foreach ($query->getActiveFilters() as $filter) {
+            if ($filter->getProperty() === $skipProperty) {
+                continue;
+            }
+
+            if ($filter instanceof TermFilter && $filter->hasValues()) {
+                return true;
+            }
+
+            if ($filter instanceof RangeFilter && ($filter->getMin() !== null || $filter->getMax() !== null)) {
+                return true;
+            }
+
+            if (!$filter instanceof TermFilter && !$filter instanceof RangeFilter) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

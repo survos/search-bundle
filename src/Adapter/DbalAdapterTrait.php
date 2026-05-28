@@ -43,6 +43,25 @@ trait DbalAdapterTrait
                 $names[] = ':' . $name;
                 $params[$name] = $value;
             }
+
+            $facetValueTable = $this->optionalStringParameter($search, 'facetValueTable');
+            if ($facetValueTable !== null) {
+                $fieldParam = $this->parameterName($filter->getProperty() . '_facet_field');
+                $params[$fieldParam] = $filter->getProperty();
+                $alias = 'fv_' . $this->parameterName($filter->getProperty());
+                $where[] = sprintf(
+                    'EXISTS (SELECT 1 FROM %s %s WHERE %s.item_rowid = d.rowid AND %s.field = :%s AND %s.value IN (%s))',
+                    $this->connection->quoteIdentifier($facetValueTable),
+                    $alias,
+                    $alias,
+                    $alias,
+                    $fieldParam,
+                    $alias,
+                    implode(', ', $names),
+                );
+                return;
+            }
+
             $where[] = sprintf('%s IN (%s)', $column, implode(', ', $names));
         }
 
@@ -86,5 +105,16 @@ trait DbalAdapterTrait
     private function parameterName(string $name): string
     {
         return preg_replace('/[^A-Za-z0-9_]/', '_', $name) ?? 'param';
+    }
+
+    private function optionalStringParameter(SearchInterface $search, string $parameter): ?string
+    {
+        try {
+            $value = $search->getResolvedAdapterParameter($parameter);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 }
