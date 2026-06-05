@@ -107,5 +107,20 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
                 'paths' => [dirname(__DIR__) . '/templates' => 'SurvosSearch'],
             ]);
         }
+
+        // Zero-config: mezcalito_ux_search requires at least one adapter. Provide a
+        // sensible `default` so apps work without a mezcalito_ux_search.yaml — the
+        // tacman/ux-search soft-fork lost mezcalito's Flex recipe that used to create
+        // it. The DSN falls back to doctrine://default but honours the env var when
+        // set, and an app's own config (extra adapters, a different default) merges
+        // over this by key.
+        if ($builder->hasExtension('mezcalito_ux_search')) {
+            $builder->setParameter('env(MEZCALITO_UX_SEARCH_DEFAULT_DSN)', 'doctrine://default');
+            $builder->prependExtensionConfig('mezcalito_ux_search', [
+                'adapters' => [
+                    'default' => '%env(MEZCALITO_UX_SEARCH_DEFAULT_DSN)%',
+                ],
+            ]);
+        }
     }
 }
