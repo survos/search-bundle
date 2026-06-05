@@ -7,7 +7,7 @@
         "php": "^8.4",
         "doctrine/dbal": "^4.3",
         "doctrine/doctrine-bundle": "^2.14|^3.0",
-        "tacman/ux-search": "^0.6.1",
+        "tacman/ux-search": "^1.0",
         "survos/kit-bundle": "^2.5",
         "survos/field-bundle": "^2.5",
         "symfony/config": "^8.1",
