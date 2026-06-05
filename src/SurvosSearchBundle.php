@@ -16,6 +16,7 @@ use Survos\SearchBundle\Adapter\PostgresBm25\PostgresBm25Factory;
 use Survos\SearchBundle\Adapter\SqliteFts5\SqliteFts5Factory;
 use Survos\SearchBundle\Command\SearchCreateCommand;
 use Survos\SearchBundle\Controller\AutoSearchController;
+use Survos\SearchBundle\EventSubscriber\HitEntityHydrator;
 use Survos\SearchBundle\Compiler\AutoEntitySearchPass;
 use Survos\SearchBundle\DependencyInjection\UxSearchAdapterPass;
 use Survos\SearchBundle\Registry\UxSearchRegistry;
@@ -74,6 +75,7 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
             ->set(PostgresBm25Factory::class)
                 ->arg('$managerRegistry', new Reference(ManagerRegistry::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
                 ->tag('mezcalito_ux_search.adapter_factory')
+            ->set(HitEntityHydrator::class)
             ->set(SearchExtension::class)
                 ->arg('$fieldReader', new Reference(FieldReader::class))
                 ->tag('twig.extension')

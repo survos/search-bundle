@@ -34,6 +34,9 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
             'where' => null,
             'params' => [],
             'maxFacetValues' => 100,
+            // Drop hits whose scoreExpression is below this (0 = keep all). Useful
+            // to filter low-weight matches, e.g. a term found only in OCR text.
+            'scoreThreshold' => 0.0,
             // Keep these explicit because pg_textsearch and ParadeDB expose
             // different BM25 operators. Use :bm25Query in both expressions.
         ]);
@@ -50,6 +53,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
         $resolver->setAllowedTypes('maxFacetValues', 'int');
         $resolver->setAllowedTypes('matchExpression', 'string');
         $resolver->setAllowedTypes('scoreExpression', 'string');
+        $resolver->setAllowedTypes('scoreThreshold', ['int', 'float']);
     }
 
     public function search(Query $query, SearchInterface $search): ResultSet
@@ -110,6 +114,12 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
         if ($query->getQueryString() !== '') {
             $where[] = $search->getResolvedAdapterParameter('matchExpression');
             $params['bm25Query'] = $query->getQueryString();
+
+            $threshold = $search->getResolvedAdapterParameter('scoreThreshold');
+            if (is_numeric($threshold) && $threshold > 0) {
+                $where[] = sprintf('(%s) >= :scoreThreshold', $search->getResolvedAdapterParameter('scoreExpression'));
+                $params['scoreThreshold'] = (float) $threshold;
+            }
         }
 
         return $where;
@@ -117,6 +127,13 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
 
     private function orderBy(Query $query, SearchInterface $search): string
     {
+        // With a text query, order by relevance: it uses the FTS index, whereas a
+        // column sort (e.g. created_at) makes the planner abandon the index and
+        // recompute the match for every row. Browse (no query) uses the column sort.
+        if ($query->getQueryString() !== '') {
+            return 'ORDER BY _score DESC';
+        }
+
         $activeSort = $query->getActiveSort();
         if (is_string($activeSort) && str_contains($activeSort, ':')) {
             [$property, $direction] = explode(':', $activeSort, 2);
@@ -128,7 +145,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
             }
         }
 
-        return $query->getQueryString() === '' ? '' : 'ORDER BY _score DESC';
+        return '';
     }
 
     /**

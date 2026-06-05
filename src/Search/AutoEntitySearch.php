@@ -51,13 +51,20 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
             $this->applyConstantFallback();
         }
 
-        // DoctrineAdapter only accepts these four keys; strip Survos DBAL adapter params.
+        // DoctrineAdapter only accepts these keys; strip Survos DBAL adapter params.
         $searchFields = $this->getAdapterParameters()[DoctrineAdapter::SEARCH_FIELDS] ?? [];
         $this->setAdapterParameters([
             DoctrineAdapter::SEARCH_FIELDS          => $searchFields,
             DoctrineAdapter::QUERY_BUILDER_ALIAS    => 'o',
             DoctrineAdapter::QUERY_BUILDER          => static function (QueryBuilder $qb): void {},
             DoctrineAdapter::MAX_FACET_VALUES_PARAM => $this->getAdapterParameters()[DoctrineAdapter::MAX_FACET_VALUES_PARAM] ?? 20,
+            // Auto-entity facets are plain columns on the base entity (no to-many joins),
+            // so count(DISTINCT pk) is redundant and forces a full table sort per facet.
+            // Emit plain count() instead. See mezcalito/ux-search#46.
+            DoctrineAdapter::COUNT_DISTINCT         => false,
+            // No to-many fetch joins either, so skip the DISTINCT id / ROW_NUMBER()
+            // paginator walker and use a plain LIMIT/OFFSET.
+            DoctrineAdapter::FETCH_JOIN_COLLECTION  => false,
         ]);
     }
 

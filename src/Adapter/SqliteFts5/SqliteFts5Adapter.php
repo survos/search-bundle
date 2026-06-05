@@ -130,6 +130,12 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
 
     private function orderBy(Query $query, SearchInterface $search): string
     {
+        // With a text query, order by relevance (FTS5 bm25() ranks lower = better).
+        // Browse (no query) uses the column sort.
+        if ($query->getQueryString() !== '') {
+            return 'ORDER BY _score ASC';
+        }
+
         $activeSort = $query->getActiveSort();
         if (is_string($activeSort) && str_contains($activeSort, ':')) {
             [$property, $direction] = explode(':', $activeSort, 2);
@@ -141,7 +147,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             }
         }
 
-        return $query->getQueryString() === '' ? '' : 'ORDER BY _score ASC';
+        return '';
     }
 
     /**
