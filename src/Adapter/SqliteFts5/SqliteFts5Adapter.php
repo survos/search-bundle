@@ -105,7 +105,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
      * @param array<string, mixed> $params
      * @return string[]
      */
-    private function baseWhere(Query $query, SearchInterface $search, array &$params): array
+    private function baseWhere(Query $query, SearchInterface $search, array &$params, bool $ftsInWhere = true): array
     {
         $where = [];
         if (is_string($search->getResolvedAdapterParameter('where'))) {
@@ -113,8 +113,13 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         }
 
         if ($query->getQueryString() !== '') {
-            $where[] = sprintf('%s MATCH :ftsQuery', $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable')));
             $params['ftsQuery'] = $this->escapeMatchQuery($query->getQueryString());
+            // Facet aggregations materialize the MATCH in a CTE (see ftsCtePrefix) so
+            // the highly-selective FTS match drives the join; they bind :ftsQuery but
+            // do not want the MATCH predicate inlined here.
+            if ($ftsInWhere) {
+                $where[] = sprintf('%s MATCH :ftsQuery', $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable')));
+            }
         }
 
         return $where;
@@ -162,7 +167,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             $column = $this->columnFor($search, 'facetColumns', $facet->getProperty());
 
             $params = $this->baseParams($search);
-            $where = $this->baseWhere($query, $search, $params);
+            $where = $this->baseWhere($query, $search, $params, ftsInWhere: false);
             $this->applyFilters($query, $search, $where, $params, $facet->getProperty());
             $params['maxFacetValues'] = $search->getResolvedAdapterParameter('maxFacetValues');
 
@@ -179,19 +184,21 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
                 $params['facetField'] = $facet->getProperty();
                 $where[] = 'fv.field = :facetField';
                 $sql = sprintf(
-                    'SELECT fv.value AS value, COUNT(*) AS total FROM %s fv JOIN %s ON d.rowid = fv.item_rowid%s%s GROUP BY fv.value ORDER BY total DESC LIMIT :maxFacetValues',
+                    '%sSELECT fv.value AS value, COUNT(*) AS total FROM %s fv JOIN %s ON d.rowid = fv.item_rowid%s%s GROUP BY fv.value ORDER BY total DESC LIMIT :maxFacetValues',
+                    $this->ftsCtePrefix($search, $usesFts),
                     $this->connection->quoteIdentifier($valueTable),
                     $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
-                    $this->joinClause($search, $usesFts),
+                    $this->joinClause($search, $usesFts, '__fts'),
                     ' WHERE ' . implode(' AND ', $where),
                 );
             } else {
                 $usesFts = $query->getQueryString() !== '';
                 $sql = sprintf(
-                    'SELECT %s AS value, COUNT(*) AS total FROM %s%s%s GROUP BY %s ORDER BY total DESC LIMIT :maxFacetValues',
+                    '%sSELECT %s AS value, COUNT(*) AS total FROM %s%s%s GROUP BY %s ORDER BY total DESC LIMIT :maxFacetValues',
+                    $this->ftsCtePrefix($search, $usesFts),
                     $column,
                     $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
-                    $this->joinClause($search, $usesFts),
+                    $this->joinClause($search, $usesFts, '__fts'),
                     $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
                     $column,
                 );
@@ -227,16 +234,17 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
 
             $column = $this->columnFor($search, 'facetColumns', $facet->getProperty());
             $params = $this->baseParams($search);
-            $where = $this->baseWhere($query, $search, $params);
+            $where = $this->baseWhere($query, $search, $params, ftsInWhere: false);
             $this->applyFilters($query, $search, $where, $params, $facet->getProperty());
 
             $usesFts = $query->getQueryString() !== '';
             $sql = sprintf(
-                'SELECT MIN(%s) AS min_value, MAX(%s) AS max_value FROM %s%s%s',
+                '%sSELECT MIN(%s) AS min_value, MAX(%s) AS max_value FROM %s%s%s',
+                $this->ftsCtePrefix($search, $usesFts),
                 $column,
                 $column,
                 $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
-                $this->joinClause($search, $usesFts),
+                $this->joinClause($search, $usesFts, '__fts'),
                 $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
             );
             $row = $this->connection->executeQuery($sql, $params)->fetchAssociative();
@@ -259,17 +267,38 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         return str_replace('"', '""', trim($query));
     }
 
-    private function joinClause(SearchInterface $search, bool $usesFts): string
+    private function joinClause(SearchInterface $search, bool $usesFts, ?string $ftsSource = null): string
     {
         if (!$usesFts) {
             return '';
         }
 
+        // The CTE in ftsCtePrefix() is aliased back to `f`, so the configured
+        // joinExpression (default `f.rowid = d.rowid`) works against either source.
+        $source = $ftsSource ?? $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable'));
+
         return sprintf(
             ' JOIN %s f ON %s',
-            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable')),
+            $source,
             $search->getResolvedAdapterParameter('joinExpression'),
         );
+    }
+
+    /**
+     * Prefix that materializes the matching FTS rowids once, so the selective MATCH
+     * drives facet GROUP BY aggregations. Without it SQLite drives those queries from
+     * the broad facet(field) index and probes the FTS virtual table per row, which is
+     * orders of magnitude slower (measured ~30x on cleveland.folio).
+     */
+    private function ftsCtePrefix(SearchInterface $search, bool $usesFts): string
+    {
+        if (!$usesFts) {
+            return '';
+        }
+
+        $fts = $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable'));
+
+        return sprintf('WITH __fts AS MATERIALIZED (SELECT rowid FROM %1$s WHERE %1$s MATCH :ftsQuery) ', $fts);
     }
 
     private function hasActiveFilters(Query $query, ?string $skipProperty = null): bool
