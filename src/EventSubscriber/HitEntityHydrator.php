@@ -53,8 +53,8 @@ final readonly class HitEntityHydrator implements EventSubscriberInterface
         }
 
         $entityClass = $event->getSearch()->getIndexName();
-        if (!\is_string($entityClass)) {
-            return;
+        if (!\is_string($entityClass) || !class_exists($entityClass)) {
+            return; // index name is not a class (e.g. folio_row) — nothing to hydrate
         }
 
         $manager = $this->registry->getManagerForClass($entityClass);
