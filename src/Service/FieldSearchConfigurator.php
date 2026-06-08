@@ -6,6 +6,7 @@ namespace Survos\SearchBundle\Service;
 
 use Mezcalito\UxSearchBundle\Search\SearchInterface;
 use Mezcalito\UxSearchBundle\Twig\Components\Facet\RangeInput;
+use Mezcalito\UxSearchBundle\Twig\Components\Facet\RangeSlider;
 use Mezcalito\UxSearchBundle\Twig\Components\Facet\RefinementList;
 use Survos\FieldBundle\Enum\Widget;
 use Survos\FieldBundle\Model\FieldDescriptor;
@@ -61,15 +62,12 @@ final readonly class FieldSearchConfigurator
             }
         }
 
-        $search->setAvailableHitsPerPage($this->defaultHitsPerPageChoices);
+        $search->setAvailableHitsPerPage(array_values(array_unique([$this->defaultHitsPerPage, ...$this->defaultHitsPerPageChoices])));
 
         $adapterParameters = $search->getAdapterParameters();
-        $adapterParameters += [
-            'searchFields' => $searchable,
-            'facetColumns' => $facetColumns,
-            'sortColumns' => $sortColumns,
-            'defaultHitsPerPage' => $this->defaultHitsPerPage,
-        ];
+        $adapterParameters['searchFields'] = array_values(array_unique(array_merge($adapterParameters['searchFields'] ?? [], $searchable)));
+        $adapterParameters['facetColumns'] = array_merge($adapterParameters['facetColumns'] ?? [], $facetColumns);
+        $adapterParameters['sortColumns'] = array_merge($adapterParameters['sortColumns'] ?? [], $sortColumns);
 
         $search->setAdapterParameters($adapterParameters);
     }
@@ -90,7 +88,8 @@ final readonly class FieldSearchConfigurator
     private function componentFor(FieldDescriptor $descriptor): string
     {
         return match ($descriptor->resolvedWidget()) {
-            Widget::Range, Widget::Date => RangeInput::class,
+            Widget::Range => RangeSlider::class,
+            Widget::Date => RangeInput::class,
             default => RefinementList::class,
         };
     }

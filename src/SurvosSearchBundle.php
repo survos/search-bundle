@@ -15,6 +15,7 @@ use Survos\FieldBundle\SurvosFieldBundle;
 use Survos\SearchBundle\Adapter\PostgresBm25\PostgresBm25Factory;
 use Survos\SearchBundle\Adapter\SqliteFts5\SqliteFts5Factory;
 use Survos\SearchBundle\Command\SearchCreateCommand;
+use Survos\SearchBundle\Command\SearchIndexCommand;
 use Survos\SearchBundle\Controller\AutoSearchController;
 use Survos\SearchBundle\EventSubscriber\HitEntityHydrator;
 use Survos\SearchBundle\Compiler\AutoEntitySearchPass;
@@ -81,6 +82,8 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
                 ->tag('twig.extension')
             ->set(SearchCreateCommand::class)
                 ->arg('$projectDir', '%kernel.project_dir%')
+                ->public()
+            ->set(SearchIndexCommand::class)
                 ->public();
 
         if (class_exists(\Survos\TablerBundle\Menu\AbstractAdminMenuSubscriber::class)) {

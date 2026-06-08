@@ -195,11 +195,14 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
     {
         $stats = [];
         foreach ($search->getFacets() as $facet) {
-            $filter = $query->getActiveFilter($facet->getProperty());
-            if (!$filter instanceof RangeFilter) {
+            $component = $facet->getDisplayComponent();
+            if ($component === null
+                || !is_subclass_of($component, \Mezcalito\UxSearchBundle\Twig\Components\Facet\AbstractFacet::class)
+                || !$component::usesFacetStats()) {
                 continue;
             }
 
+            $filter = $query->getActiveFilter($facet->getProperty());
             $column = $this->columnFor($search, 'facetColumns', $facet->getProperty());
             $params = $search->getResolvedAdapterParameter('params');
             $where = $this->baseWhere($query, $search, $params);
@@ -219,12 +222,14 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
                     $facet->getProperty(),
                     (float) $row['min_value'],
                     (float) $row['max_value'],
-                    $filter->getMin(),
-                    $filter->getMax(),
+                    $filter instanceof RangeFilter ? $filter->getMin() : null,
+                    $filter instanceof RangeFilter ? $filter->getMax() : null,
                 );
             }
         }
 
         return $stats;
     }
+
+
 }

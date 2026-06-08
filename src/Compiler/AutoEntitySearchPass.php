@@ -61,8 +61,10 @@ final class AutoEntitySearchPass implements CompilerPassInterface
             return;
         }
 
+        $defaultAdapterDsn = $this->defaultAdapterDsn($container);
         $uxDescriptors = [];
         $newSearches = [];
+
         foreach ($entityDescriptors as $descriptorDefinition) {
             if (!$descriptorDefinition instanceof Definition) {
                 continue;
@@ -89,6 +91,7 @@ final class AutoEntitySearchPass implements CompilerPassInterface
                     ->setArgument('$entityClass', $class)
                     ->setArgument('$fieldNames', $fieldNames)
                     ->setArgument('$managerRegistry', new Reference(ManagerRegistry::class))
+                    ->setArgument('$defaultAdapterDsn', $defaultAdapterDsn)
                     ->addTag('mezcalito_ux_search.search', [
                         'index' => $class,
                         'name' => $code,
@@ -103,7 +106,7 @@ final class AutoEntitySearchPass implements CompilerPassInterface
                 '$code' => $code,
                 '$name' => $code,
                 '$adapter' => 'default',
-                '$hitTemplate' => sprintf('search/hits/%s.html.twig', $code),
+                '$hitTemplate' => $this->hitTemplate($container, $class, $code),
                 '$url' => null,
             ]);
         }
@@ -111,13 +114,51 @@ final class AutoEntitySearchPass implements CompilerPassInterface
         $container->getDefinition(UxSearchRegistry::class)
             ->setArgument('$descriptors', $uxDescriptors);
 
-        // RegisterSearchPass (TYPE_BEFORE_OPTIMIZATION, priority 0) already ran — patch SearchProvider directly.
         if ($newSearches !== [] && $container->hasDefinition(SearchProvider::class)) {
             $providerDef = $container->getDefinition(SearchProvider::class);
             $existingArg = $providerDef->getArgument('$searches');
             $existing = $existingArg instanceof IteratorArgument ? $existingArg->getValues() : [];
             $providerDef->setArgument('$searches', new IteratorArgument(array_merge($existing, $newSearches)));
         }
+    }
+
+
+    private function hitTemplate(ContainerBuilder $container, string $class, string $code): string
+    {
+        $shortName = (new \ReflectionClass($class))->getShortName();
+        $shortCode = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', $shortName));
+        $projectDir = $container->hasParameter('kernel.project_dir') ? (string) $container->getParameter('kernel.project_dir') : null;
+
+        foreach (array_unique([$code, $shortCode]) as $candidate) {
+            $template = sprintf('search/hits/%s.html.twig', $candidate);
+            if ($projectDir === null || is_file($projectDir . '/templates/' . $template)) {
+                return $template;
+            }
+        }
+
+        return sprintf('search/hits/%s.html.twig', $code);
+    }
+
+    private function defaultAdapterDsn(ContainerBuilder $container): ?string
+    {
+        if (!$container->hasParameter('mezcalito_ux_search.default_adapter') || !$container->hasParameter('mezcalito_ux_search.adapters')) {
+            return null;
+        }
+
+        $defaultAdapter = (string) $container->getParameter('mezcalito_ux_search.default_adapter');
+        $adapters = $container->getParameter('mezcalito_ux_search.adapters');
+        if (!is_array($adapters)) {
+            return null;
+        }
+
+        $adapterConfig = $adapters[$defaultAdapter] ?? null;
+        if (is_string($adapterConfig)) {
+            return $adapterConfig;
+        }
+
+        return is_array($adapterConfig) && is_string($adapterConfig['dsn'] ?? null)
+            ? $adapterConfig['dsn']
+            : null;
     }
 
     /**
