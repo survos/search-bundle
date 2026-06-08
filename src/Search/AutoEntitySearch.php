@@ -53,9 +53,7 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
             $isDbalAdapter ? null : 'o.',
         );
 
-        if ($this->getFacets() === []) {
-            $this->applyConstantFallback($isDbalAdapter);
-        }
+        $this->applyConstantFields($isDbalAdapter);
 
         if ($isDbalAdapter) {
             $this->configureDbalAdapter();
@@ -205,7 +203,7 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
         return $expressions === [] ? "to_tsvector('english', '')" : implode(' || ', $expressions);
     }
 
-    private function applyConstantFallback(bool $isDbalAdapter): void
+    private function applyConstantFields(bool $isDbalAdapter): void
     {
         $rc = new \ReflectionClass($this->entityClass);
 
@@ -214,13 +212,18 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
         $sortable = $rc->hasConstant('SORTABLE_FIELDS') ? (array) $rc->getConstant('SORTABLE_FIELDS') : [];
 
         $skipFacets = $this->nonStatFields($rc);
+        $existingFacets = [];
+        foreach ($this->getFacets() as $facet) {
+            $existingFacets[$facet->getProperty()] = true;
+        }
 
         foreach ($filterable as $field) {
-            if (isset($skipFacets[$field])) {
+            if (isset($skipFacets[$field]) || isset($existingFacets[$field])) {
                 continue;
             }
             $label = ucwords(str_replace('_', ' ', (new UnicodeString($field))->snake()->toString()));
             $this->addFacet($field, $label, RefinementList::class);
+            $existingFacets[$field] = true;
             if ($isDbalAdapter) {
                 $adapterParameters = $this->getAdapterParameters();
                 $adapterParameters['facetColumns'][$field] ??= 'd.' . $field;
@@ -228,11 +231,20 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
             }
         }
 
+        $existingSorts = [];
+        foreach ($this->getAvailableSorts() as $sort) {
+            $existingSorts[$sort['value'] ?? ''] = true;
+        }
+
         foreach ($sortable as $field) {
             $label = ucwords(str_replace('_', ' ', (new UnicodeString($field))->snake()->toString()));
             $sortKey = $isDbalAdapter ? $field : "o.{$field}";
-            $this->addAvailableSort("{$sortKey}:asc", "{$label} A-Z");
-            $this->addAvailableSort("{$sortKey}:desc", "{$label} Z-A");
+            if (!isset($existingSorts["{$sortKey}:asc"])) {
+                $this->addAvailableSort("{$sortKey}:asc", "{$label} A-Z");
+            }
+            if (!isset($existingSorts["{$sortKey}:desc"])) {
+                $this->addAvailableSort("{$sortKey}:desc", "{$label} Z-A");
+            }
             if ($isDbalAdapter) {
                 $adapterParameters = $this->getAdapterParameters();
                 $adapterParameters['sortColumns'][$field] ??= 'd.' . $field;

@@ -217,15 +217,27 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
             );
 
             $row = $this->connection->executeQuery($sql, $params)->fetchAssociative();
-            if ($row && is_numeric($row['min_value']) && is_numeric($row['max_value'])) {
-                $stats[$facet->getProperty()] = new FacetStat(
-                    $facet->getProperty(),
-                    (float) $row['min_value'],
-                    (float) $row['max_value'],
-                    $filter instanceof RangeFilter ? $filter->getMin() : null,
-                    $filter instanceof RangeFilter ? $filter->getMax() : null,
-                );
+            if (!$row) {
+                continue;
             }
+
+            $min = $row['min_value'];
+            $max = $row['max_value'];
+            if ($min === null || $max === null) {
+                $min = 0;
+                $max = 0;
+            }
+            if (!is_numeric($min) || !is_numeric($max)) {
+                continue;
+            }
+
+            $stats[$facet->getProperty()] = new FacetStat(
+                $facet->getProperty(),
+                (float) $min,
+                (float) $max,
+                $filter instanceof RangeFilter ? $filter->getMin() : null,
+                $filter instanceof RangeFilter ? $filter->getMax() : null,
+            );
         }
 
         return $stats;
