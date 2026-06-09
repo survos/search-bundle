@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Adapter\SqliteFts5;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\SyntaxErrorException;
 use Mezcalito\UxSearchBundle\Adapter\AdapterInterface;
 use Mezcalito\UxSearchBundle\Search\Filter\RangeFilter;
 use Mezcalito\UxSearchBundle\Search\Filter\TermFilter;
@@ -57,6 +58,46 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
 
     public function search(Query $query, SearchInterface $search): ResultSet
     {
+        try {
+            return $this->doSearch($query, $search);
+        } catch (SyntaxErrorException $e) {
+            // A malformed MATCH expression (notably from the `#` raw escape hatch)
+            // returns no results rather than killing the page. Genuine SQL syntax
+            // errors are programming bugs, so let those keep propagating.
+            if (!str_contains($e->getMessage(), 'fts5')) {
+                throw $e;
+            }
+
+            return $this->emptyResultSet($query, $search);
+        }
+    }
+
+    /**
+     * A fully-formed empty result set: zero hits, but with an empty distribution
+     * for every configured facet (preserving the user's checked values) so the
+     * facet templates still render. Returned when a malformed MATCH is swallowed;
+     * without the facet entries the template throws "Facet distribution … not found".
+     */
+    private function emptyResultSet(Query $query, SearchInterface $search): ResultSet
+    {
+        $distributions = [];
+        foreach ($search->getFacets() as $facet) {
+            $filter = $query->getActiveFilter($facet->getProperty());
+            $distributions[$facet->getProperty()] = (new FacetTermDistribution())
+                ->setProperty($facet->getProperty())
+                ->setValues([])
+                ->setCheckedValues($filter instanceof TermFilter ? $filter->getValues() : []);
+        }
+
+        return (new ResultSet())
+            ->setIndexUid($search->getIndexName())
+            ->setHits([])
+            ->setTotalResults(0)
+            ->setFacetDistributions($distributions);
+    }
+
+    private function doSearch(Query $query, SearchInterface $search): ResultSet
+    {
         $params = $this->baseParams($search);
         $where = $this->baseWhere($query, $search, $params);
         $this->applyFilters($query, $search, $where, $params);
@@ -67,7 +108,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         $params['limit'] = $limit;
         $params['offset'] = $offset;
 
-        $usesFts = $query->getQueryString() !== '';
+        $usesFts = $this->usesFts($query);
         $score = $usesFts ? sprintf('bm25(%s)', $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable'))) : '0';
 
         $sql = sprintf(
@@ -112,8 +153,9 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             $where[] = $search->getResolvedAdapterParameter('where');
         }
 
-        if ($query->getQueryString() !== '') {
-            $params['ftsQuery'] = $this->escapeMatchQuery($query->getQueryString());
+        $ftsQuery = Fts5MatchQuery::build($query->getQueryString());
+        if ($ftsQuery !== '') {
+            $params['ftsQuery'] = $ftsQuery;
             // Facet aggregations materialize the MATCH in a CTE (see ftsCtePrefix) so
             // the highly-selective FTS match drives the join; they bind :ftsQuery but
             // do not want the MATCH predicate inlined here.
@@ -137,7 +179,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
     {
         // With a text query, order by relevance (FTS5 bm25() ranks lower = better).
         // Browse (no query) uses the column sort.
-        if ($query->getQueryString() !== '') {
+        if ($this->usesFts($query)) {
             return 'ORDER BY _score ASC';
         }
 
@@ -173,14 +215,14 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
 
             $countTable = $search->getResolvedAdapterParameter('facetCountTable');
             $valueTable = $search->getResolvedAdapterParameter('facetValueTable');
-            if (is_string($countTable) && !$this->hasActiveFilters($query, $facet->getProperty()) && $query->getQueryString() === '') {
+            if (is_string($countTable) && !$this->hasActiveFilters($query, $facet->getProperty()) && !$this->usesFts($query)) {
                 $sql = sprintf(
                     'SELECT value, total FROM %s WHERE field = :facetField ORDER BY total DESC LIMIT :maxFacetValues',
                     $this->connection->quoteIdentifier($countTable),
                 );
                 $params['facetField'] = $facet->getProperty();
             } elseif (is_string($valueTable)) {
-                $usesFts = $query->getQueryString() !== '';
+                $usesFts = $this->usesFts($query);
                 $params['facetField'] = $facet->getProperty();
                 $where[] = 'fv.field = :facetField';
                 $sql = sprintf(
@@ -192,7 +234,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
                     ' WHERE ' . implode(' AND ', $where),
                 );
             } else {
-                $usesFts = $query->getQueryString() !== '';
+                $usesFts = $this->usesFts($query);
                 $sql = sprintf(
                     '%sSELECT %s AS value, COUNT(*) AS total FROM %s%s%s GROUP BY %s ORDER BY total DESC LIMIT :maxFacetValues',
                     $this->ftsCtePrefix($search, $usesFts),
@@ -240,7 +282,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             $where = $this->baseWhere($query, $search, $params, ftsInWhere: false);
             $this->applyFilters($query, $search, $where, $params, $facet->getProperty());
 
-            $usesFts = $query->getQueryString() !== '';
+            $usesFts = $this->usesFts($query);
             $sql = sprintf(
                 '%sSELECT MIN(%s) AS min_value, MAX(%s) AS max_value FROM %s%s%s',
                 $this->ftsCtePrefix($search, $usesFts),
@@ -278,9 +320,9 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
     }
 
 
-    private function escapeMatchQuery(string $query): string
+    private function usesFts(Query $query): bool
     {
-        return str_replace('"', '""', trim($query));
+        return Fts5MatchQuery::build($query->getQueryString()) !== '';
     }
 
     private function joinClause(SearchInterface $search, bool $usesFts, ?string $ftsSource = null): string
