@@ -233,7 +233,8 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
 
         $existingSorts = [];
         foreach ($this->getAvailableSorts() as $sort) {
-            $existingSorts[$sort['value'] ?? ''] = true;
+            // getAvailableSorts() returns Sort objects, not arrays — key by getKey().
+            $existingSorts[$sort->getKey() ?? ''] = true;
         }
 
         foreach ($sortable as $field) {
