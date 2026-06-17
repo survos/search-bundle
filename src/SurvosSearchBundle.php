@@ -35,6 +35,7 @@ use Symfony\Component\DependencyInjection\Reference;
 #[RequiredBundle(SurvosKitBundle::class)]
 #[RequiredBundle(SurvosFieldBundle::class)]
 #[RequiredBundle(MezcalitoUxSearchBundle::class)]
+// Symfony\Component\HttpKernel\Bundle\Bundle <-- Flex auto-registration marker (see Survos\Kit\AbstractSurvosBundle)
 final class SurvosSearchBundle extends AbstractSurvosBundle
 {
     use HasConfigurableRoutes;
