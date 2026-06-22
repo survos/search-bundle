@@ -51,8 +51,9 @@ final readonly class FieldSearchConfigurator
             if ($descriptor->sortable) {
                 $sortColumns[$descriptor->name] = $this->column($descriptor->name, $columnPrefix);
                 $label = $descriptor->getFallbackLabel();
-                $search->addAvailableSort($this->column($descriptor->name, $columnPrefix) . ':asc', $label . ' A-Z');
-                $search->addAvailableSort($this->column($descriptor->name, $columnPrefix) . ':desc', $label . ' Z-A');
+                [$ascendingLabel, $descendingLabel] = $this->sortLabels($descriptor, $label);
+                $search->addAvailableSort($this->column($descriptor->name, $columnPrefix) . ':asc', $ascendingLabel);
+                $search->addAvailableSort($this->column($descriptor->name, $columnPrefix) . ':desc', $descendingLabel);
             }
 
             if ($descriptor->facet || $this->shouldExposeFacet($descriptor)) {
@@ -75,6 +76,22 @@ final readonly class FieldSearchConfigurator
     private function column(string $field, ?string $prefix): string
     {
         return $prefix === null ? $field : $prefix . $field;
+    }
+
+    /** @return array{0:string, 1:string} */
+    private function sortLabels(FieldDescriptor $descriptor, string $label): array
+    {
+        $type = strtolower(ltrim($descriptor->type, '?\\'));
+
+        if (in_array($type, ['int', 'integer', 'bigint', 'smallint', 'float', 'double', 'decimal'], true)) {
+            return [$label . ' Low-High', $label . ' High-Low'];
+        }
+
+        if (str_contains($type, 'date') || str_contains($type, 'time')) {
+            return [$label . ' Old-New', $label . ' New-Old'];
+        }
+
+        return [$label . ' A-Z', $label . ' Z-A'];
     }
 
     private function shouldExposeFacet(FieldDescriptor $descriptor): bool
