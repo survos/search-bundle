@@ -65,15 +65,19 @@ trait DbalAdapterTrait
             $where[] = sprintf('%s IN (%s)', $column, implode(', ', $names));
         }
 
+        // Range bounds compare NUMERICALLY. The facet column is often a json_extract() whose value
+        // has integer/real storage class, while the bound min/max arrive as strings (slider/URL).
+        // SQLite orders integer < text across storage classes, so `year >= '1965'` is always false
+        // → zero results. CAST both sides to REAL so the comparison is numeric (also correct on Postgres).
         if ($filter instanceof RangeFilter && null !== $filter->getMin()) {
             $name = $this->parameterName($filter->getProperty() . '_min');
-            $where[] = sprintf('%s >= :%s', $column, $name);
+            $where[] = sprintf('CAST(%s AS REAL) >= CAST(:%s AS REAL)', $column, $name);
             $params[$name] = $filter->getMin();
         }
 
         if ($filter instanceof RangeFilter && null !== $filter->getMax()) {
             $name = $this->parameterName($filter->getProperty() . '_max');
-            $where[] = sprintf('%s <= :%s', $column, $name);
+            $where[] = sprintf('CAST(%s AS REAL) <= CAST(:%s AS REAL)', $column, $name);
             $params[$name] = $filter->getMax();
         }
     }
