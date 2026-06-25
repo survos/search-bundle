@@ -215,12 +215,16 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
 
             $countTable = $search->getResolvedAdapterParameter('facetCountTable');
             $valueTable = $search->getResolvedAdapterParameter('facetValueTable');
-            if (is_string($countTable) && !$this->hasActiveFilters($query, $facet->getProperty()) && !$this->usesFts($query)) {
+            $coreScope = $this->usesFts($query) ? null : $this->soleCoreScope($query, $facet->getProperty());
+            if (is_string($countTable) && $coreScope !== null) {
+                // Precomputed fast path: the only constraint is the structural core scope, so read the
+                // per-core aggregate directly (core='' when no core is selected) — no JOIN, no EXISTS.
                 $sql = sprintf(
-                    'SELECT value, total FROM %s WHERE field = :facetField ORDER BY total DESC LIMIT :maxFacetValues',
+                    'SELECT value, total FROM %s WHERE core = :facetCore AND field = :facetField ORDER BY total DESC LIMIT :maxFacetValues',
                     $this->connection->quoteIdentifier($countTable),
                 );
                 $params['facetField'] = $facet->getProperty();
+                $params['facetCore'] = $coreScope;
             } elseif (is_string($valueTable)) {
                 $usesFts = $this->usesFts($query);
                 $params['facetField'] = $facet->getProperty();
@@ -359,26 +363,44 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         return sprintf('WITH __fts AS MATERIALIZED (SELECT rowid FROM %1$s WHERE %1$s MATCH :ftsQuery) ', $fts);
     }
 
-    private function hasActiveFilters(Query $query, ?string $skipProperty = null): bool
+    /**
+     * The precomputed facet-count table is partitioned by core (core='' = all cores). It can serve a
+     * facet only when no other constraint narrows the set: the active filters must reduce to the
+     * structural core scope alone — either none (→ '') or a single-value `core` term filter (→ that
+     * core). Returns the core to read, or null to fall back to the live aggregation.
+     *
+     * The `core` filter mirrors the search's core_id where-scope, which constrains every facet query
+     * (it is not dropped when computing the core facet itself), so it always sets the partition even
+     * when $skipProperty === 'core'. Any other active filter would make the precomputed totals wrong.
+     */
+    private function soleCoreScope(Query $query, ?string $skipProperty): ?string
     {
+        $core = '';
         foreach ($query->getActiveFilters() as $filter) {
+            if ($filter->getProperty() === 'core'
+                && $filter instanceof TermFilter
+                && count($filter->getValues()) === 1) {
+                $core = (string) array_values($filter->getValues())[0];
+                continue;
+            }
+
             if ($filter->getProperty() === $skipProperty) {
                 continue;
             }
 
             if ($filter instanceof TermFilter && $filter->hasValues()) {
-                return true;
+                return null;
             }
 
             if ($filter instanceof RangeFilter && ($filter->getMin() !== null || $filter->getMax() !== null)) {
-                return true;
+                return null;
             }
 
             if (!$filter instanceof TermFilter && !$filter instanceof RangeFilter) {
-                return true;
+                return null;
             }
         }
 
-        return false;
+        return $core;
     }
 }
