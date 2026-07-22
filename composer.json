@@ -15,6 +15,7 @@
         "symfony/dependency-injection": "^8.1",
         "symfony/http-kernel": "^8.1",
         "symfony/options-resolver": "^8.1",
+        "symfony/cache-contracts": "^3.6",
         "symfony/service-contracts": "^3.6",
         "symfony/string": "^8.1",
         "symfony/ux-twig-component": "^3.0",

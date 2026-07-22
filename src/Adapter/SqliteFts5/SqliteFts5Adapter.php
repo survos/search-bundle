@@ -17,12 +17,16 @@ use Mezcalito\UxSearchBundle\Search\ResultSet\ResultSet;
 use Mezcalito\UxSearchBundle\Search\SearchInterface;
 use Survos\SearchBundle\Adapter\DbalAdapterTrait;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Contracts\Cache\CacheInterface;
 
 final readonly class SqliteFts5Adapter implements AdapterInterface
 {
     use DbalAdapterTrait;
 
-    public function __construct(private Connection $connection) {}
+    public function __construct(
+        private Connection $connection,
+        private ?CacheInterface $facetCache = null,
+    ) {}
 
     public function configureParameters(OptionsResolver $resolver): void
     {
@@ -138,8 +142,8 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             ->setIndexUid($search->getIndexName())
             ->setHits($hits)
             ->setTotalResults((int) $this->connection->executeQuery($countSql, $params)->fetchOne())
-            ->setFacetDistributions($this->facetDistributions($query, $search))
-            ->setFacetStats($this->facetStats($query, $search));
+            ->setFacetDistributions($this->cachedFacetCompute($this->facetCache, 'distributions', $query, $search, fn () => $this->facetDistributions($query, $search)))
+            ->setFacetStats($this->cachedFacetCompute($this->facetCache, 'stats', $query, $search, fn () => $this->facetStats($query, $search)));
     }
 
     /**

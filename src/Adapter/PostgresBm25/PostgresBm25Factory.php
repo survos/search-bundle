@@ -9,10 +9,14 @@ use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\Persistence\ManagerRegistry;
 use Mezcalito\UxSearchBundle\Adapter\AdapterFactoryInterface;
 use Mezcalito\UxSearchBundle\Adapter\AdapterInterface;
+use Symfony\Contracts\Cache\CacheInterface;
 
 final readonly class PostgresBm25Factory implements AdapterFactoryInterface
 {
-    public function __construct(private ?ManagerRegistry $managerRegistry = null) {}
+    public function __construct(
+        private ?ManagerRegistry $managerRegistry = null,
+        private ?CacheInterface $facetCache = null,
+    ) {}
 
     public function support(string $dsn): bool
     {
@@ -43,6 +47,6 @@ final readonly class PostgresBm25Factory implements AdapterFactoryInterface
             ));
         }
 
-        return new PostgresBm25Adapter($connection);
+        return new PostgresBm25Adapter($connection, $this->facetCache);
     }
 }

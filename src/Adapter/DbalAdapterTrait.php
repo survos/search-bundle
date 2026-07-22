@@ -10,9 +10,54 @@ use Mezcalito\UxSearchBundle\Search\Filter\RangeFilter;
 use Mezcalito\UxSearchBundle\Search\Filter\TermFilter;
 use Mezcalito\UxSearchBundle\Search\Query;
 use Mezcalito\UxSearchBundle\Search\SearchInterface;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 trait DbalAdapterTrait
 {
+    /**
+     * Facets are aggregated over the full filtered result set and depend only on the
+     * query string + active filters — never on page, sort, or hits-per-page. A flood of
+     * requests that only vary `page` (deep-pagination scraping is what took museado.org
+     * down on 2026-07-21) would otherwise recompute the same expensive GROUP BY/MIN/MAX
+     * aggregate on every single request. Cache by filter fingerprint so those requests
+     * share one result instead of each re-running the query.
+     *
+     * @template T of array
+     * @param callable(): T $compute
+     * @return T
+     */
+    private function cachedFacetCompute(?CacheInterface $cache, string $kind, Query $query, SearchInterface $search, callable $compute): array
+    {
+        if ($cache === null) {
+            return $compute();
+        }
+
+        $filters = [];
+        foreach ($query->getActiveFilters() as $property => $filter) {
+            $filters[$property] = match (true) {
+                $filter instanceof TermFilter => ['term', array_values($filter->getValues())],
+                $filter instanceof RangeFilter => ['range', $filter->getMin(), $filter->getMax()],
+                default => ['other'],
+            };
+        }
+        ksort($filters);
+
+        $key = sprintf(
+            'survos_search_facet.%s.%s.%s.%s',
+            $kind,
+            preg_replace('/[^A-Za-z0-9_]/', '_', $search->getIndexName()) ?? 'default',
+            md5($query->getQueryString()),
+            md5(serialize($filters)),
+        );
+
+        return $cache->get($key, function (ItemInterface $item) use ($compute) {
+            $item->expiresAfter(60);
+
+            return $compute();
+        });
+    }
+
     /**
      * @param array<string, mixed> $params
      * @param string[]             $where
