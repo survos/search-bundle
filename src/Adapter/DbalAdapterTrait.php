@@ -43,10 +43,17 @@ trait DbalAdapterTrait
         }
         ksort($filters);
 
+        // getResolvedAdapterParameters() is the one thing that fully determines what SQL
+        // actually runs (table, ftsTable, where, bound params, facetColumns), so it also
+        // captures which facets are configured. Hashing it (rather than getIndexName(),
+        // which is a class-level literal shared by every folio search regardless of
+        // dataset) means two different datasets/cores can never collide in the cache.
+        $dataSource = serialize($search->getResolvedAdapterParameters());
+
         $key = sprintf(
             'survos_search_facet.%s.%s.%s.%s',
             $kind,
-            preg_replace('/[^A-Za-z0-9_]/', '_', $search->getIndexName()) ?? 'default',
+            substr(md5($dataSource), 0, 16),
             md5($query->getQueryString()),
             md5(serialize($filters)),
         );
