@@ -19,7 +19,7 @@
         "symfony/service-contracts": "^3.6",
         "symfony/string": "^8.1",
         "symfony/ux-twig-component": "^3.0",
-        "twig/twig": "^3.4"
+        "twig/twig": "^3.4|^4.0"
     },
     "autoload": {
         "psr-4": {
