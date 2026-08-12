@@ -103,7 +103,7 @@ trait DbalAdapterTrait
                 $alias = 'fv_' . $this->parameterName($filter->getProperty());
                 $where[] = sprintf(
                     'EXISTS (SELECT 1 FROM %s %s WHERE %s.item_rowid = d.rowid AND %s.field = :%s AND %s.value IN (%s))',
-                    $this->connection->quoteIdentifier($facetValueTable),
+                    $this->connection->quoteSingleIdentifier($facetValueTable),
                     $alias,
                     $alias,
                     $alias,
@@ -153,7 +153,7 @@ trait DbalAdapterTrait
         return implode(', ', array_map(
             static fn (string $column): string => str_contains($column, '(') || str_contains($column, ' ') || str_contains($column, '.') || str_contains($column, '*')
                 ? $column
-                : 'd.' . $connection->quoteIdentifier($column),
+                : 'd.' . $connection->quoteSingleIdentifier($column),
             $columns,
         ));
     }
