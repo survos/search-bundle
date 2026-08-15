@@ -49,6 +49,14 @@ abstract class AbstractSearch implements SearchInterface, ResetInterface
     public function create(array $options = []): static
     {
         $this->eventDispatcher = new EventDispatcher();
+        // Searches are services, so one instance can be built more than once in a single
+        // process: a Live Component re-render, two search widgets on a page, or worker-mode
+        // request reuse. addFacet()/addAvailableSort() append, so without this the second
+        // build() inherits the first one's facets -- and then anything derived from them
+        // (adapter facetColumns, and the facetFields/stats aggregations built from those) is
+        // computed for a different set than the template renders, giving
+        // "Facet stat ... is not found" / "Facet distribution ... is not found".
+        $this->reset();
         $this->build($options);
 
         return $this;
