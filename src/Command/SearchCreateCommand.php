@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Command;
 
-use Mezcalito\UxSearchBundle\Attribute\AsSearch;
+use Survos\SearchBundle\Attribute\AsSearch;
 use Survos\SearchBundle\Search\AbstractFieldSearch;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -23,7 +23,7 @@ final class SearchCreateCommand
         SymfonyStyle $io,
         #[Argument('Entity or DTO class carrying #[Field] metadata')] string $fieldClass,
         #[Argument('Search class short name, with or without Search suffix')] ?string $name = null,
-        #[Option('Adapter name from mezcalito_ux_search.adapters')] string $adapter = 'default',
+        #[Option('Adapter name from survos_search.adapters')] string $adapter = 'default',
         #[Option('Index/table name; defaults to the field class')] ?string $index = null,
         #[Option('Output directory relative to the app project')] string $dir = 'src/Search',
         #[Option('PHP namespace for the generated class')] string $namespace = 'App\\Search',

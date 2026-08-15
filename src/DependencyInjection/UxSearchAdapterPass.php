@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\DependencyInjection;
 
-use Mezcalito\UxSearchBundle\Adapter\AdapterProvider;
+use Survos\SearchBundle\Adapter\AdapterProvider;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -19,7 +19,7 @@ final class UxSearchAdapterPass implements CompilerPassInterface
         }
 
         $factories = [];
-        foreach ($container->findTaggedServiceIds('mezcalito_ux_search.adapter_factory') as $id => $_tags) {
+        foreach ($container->findTaggedServiceIds('survos_search.adapter_factory') as $id => $_tags) {
             $factories[] = new Reference($id);
         }
 

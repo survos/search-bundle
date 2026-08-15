@@ -1,0 +1,69 @@
+<?php
+
+/*
+ * This file is part of the UxSearch project.
+ *
+ * (c) Mezcalito (https://www.mezcalito.fr)
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
+declare(strict_types=1);
+
+namespace Survos\SearchBundle\Twig\Components\Facet;
+
+use Survos\SearchBundle\Context\ContextProvider;
+use Survos\SearchBundle\Search\Facet;
+use Symfony\UX\TwigComponent\Attribute\ExposeInTemplate;
+use Symfony\UX\TwigComponent\Attribute\PreMount;
+
+abstract class AbstractFacet
+{
+    public string $property;
+
+    public bool $collapsible = true;
+
+    public bool $collapsed = false;
+
+    public function __construct(protected ContextProvider $contextProvider)
+    {
+    }
+
+    /**
+     * Whether this facet renders from min/max stats (a range facet) instead of a
+     * term distribution. Range facets only consume getFacetStatsQuery; list facets
+     * only consume getFacetTermQuery. Adapters use this to skip the query a facet
+     * does not consume rather than computing both for every facet. See
+     * mezcalito/ux-search#46.
+     */
+    public static function usesFacetStats(): bool
+    {
+        return false;
+    }
+
+    #[ExposeInTemplate]
+    public function getLabel(): string
+    {
+        return $this->getFacet()->getLabel();
+    }
+
+    #[ExposeInTemplate]
+    protected function getFacet(): Facet
+    {
+        return $this->contextProvider->getCurrentContext()->getSearch()->getFacet($this->property);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @return array<string, mixed>
+     */
+    #[PreMount(priority: -100)]
+    public function mergeFacetData(array $data): array
+    {
+        $facet = $this->contextProvider->getCurrentContext()->getSearch()->getFacet($data['property']);
+
+        return array_merge($facet->getProps(), $data);
+    }
+}

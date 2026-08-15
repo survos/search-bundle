@@ -7,8 +7,8 @@ namespace Survos\SearchBundle\Search;
 use Doctrine\ORM\Mapping\Column;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
-use Mezcalito\UxSearchBundle\Adapter\Doctrine\DoctrineAdapter;
-use Mezcalito\UxSearchBundle\Twig\Components\Facet\RefinementList;
+use Survos\SearchBundle\Adapter\Doctrine\DoctrineAdapter;
+use Survos\SearchBundle\Twig\Components\Facet\RefinementList;
 use Symfony\Component\String\UnicodeString;
 
 final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateSearchInterface
@@ -46,17 +46,22 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
         $this->hitTemplate = $options['hitTemplate'] ?? null;
 
         $isDbalAdapter = $this->isDbalAdapter();
+        $isElasticsearchAdapter = $this->isElasticsearchAdapter();
         $this->getFieldSearchConfigurator()->configure(
             $this,
             $this->entityClass,
             $this->fieldNames,
-            $isDbalAdapter ? null : 'o.',
+            ($isDbalAdapter || $isElasticsearchAdapter) ? null : 'o.',
         );
 
-        $this->applyConstantFields($isDbalAdapter);
+        $this->applyConstantFields($isDbalAdapter || $isElasticsearchAdapter);
 
         if ($isDbalAdapter) {
             $this->configureDbalAdapter();
+            return;
+        }
+        if ($isElasticsearchAdapter) {
+            $this->configureElasticsearchAdapter();
             return;
         }
 
@@ -75,6 +80,75 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
     {
         return is_string($this->defaultAdapterDsn)
             && (str_starts_with($this->defaultAdapterDsn, 'sqlite-fts5://') || str_starts_with($this->defaultAdapterDsn, 'postgres-bm25://'));
+    }
+
+    private function isElasticsearchAdapter(): bool
+    {
+        return is_string($this->defaultAdapterDsn)
+            && (str_starts_with($this->defaultAdapterDsn, 'elasticsearch://')
+                || str_starts_with($this->defaultAdapterDsn, 'elasticsearch+https://')
+                || str_starts_with($this->defaultAdapterDsn, 'elastic://'));
+    }
+
+    private function configureElasticsearchAdapter(): void
+    {
+        if (!$this->managerRegistry) {
+            return;
+        }
+        $manager = $this->managerRegistry->getManagerForClass($this->entityClass);
+        if (!$manager) {
+            return;
+        }
+
+        $metadata = $manager->getClassMetadata($this->entityClass);
+        $parameters = $this->getAdapterParameters();
+        $parameters['searchFields'] = $this->plainFields($parameters['searchFields'] ?? []);
+        $facetColumns = $parameters['facetColumns'] ?? [];
+        $sortColumns = $parameters['sortColumns'] ?? [];
+        $parameters['facetFields'] = [];
+        $parameters['sortFields'] = [];
+        $parameters['mappings'] = [];
+
+        foreach ($metadata->getFieldNames() as $field) {
+            $type = $metadata->getTypeOfField($field);
+            $isText = in_array($type, ['string', 'text', 'ascii_string'], true);
+            $parameters['mappings'][$field] = $isText
+                ? ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword', 'ignore_above' => 512]]]
+                : ['type' => match ($type) {
+                    'integer', 'smallint', 'bigint' => 'long',
+                    'float', 'decimal' => 'double',
+                    'boolean' => 'boolean',
+                    'date', 'date_immutable', 'datetime', 'datetime_immutable', 'datetimetz', 'datetimetz_immutable' => 'date',
+                    default => 'keyword',
+                }];
+
+            if (array_key_exists($field, $facetColumns)) {
+                $parameters['facetFields'][$field] = $isText ? $field . '.keyword' : $field;
+            }
+            if (array_key_exists($field, $sortColumns)) {
+                $parameters['sortFields'][$field] = $isText ? $field . '.keyword' : $field;
+            }
+        }
+
+        $parameters['index'] ??= strtolower($metadata->getTableName());
+        $parameters['idField'] ??= $metadata->getSingleIdentifierFieldName();
+        $parameters['sourceFields'] ??= $metadata->getFieldNames();
+        unset($parameters['facetColumns'], $parameters['sortColumns']);
+        $this->setAdapterParameters($parameters);
+    }
+
+    /** @param array<int|string, mixed> $fields
+     *  @return string[]
+     */
+    private function plainFields(array $fields): array
+    {
+        $plain = [];
+        foreach ($fields as $field) {
+            if (is_string($field)) {
+                $plain[] = preg_replace('/^[a-z]+\./', '', $field) ?? $field;
+            }
+        }
+        return array_values(array_unique($plain));
     }
 
     private function configureDbalAdapter(): void

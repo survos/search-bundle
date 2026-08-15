@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Adapter;
 
 use Doctrine\DBAL\Connection;
-use Mezcalito\UxSearchBundle\Search\Filter\FilterInterface;
-use Mezcalito\UxSearchBundle\Search\Filter\RangeFilter;
-use Mezcalito\UxSearchBundle\Search\Filter\TermFilter;
-use Mezcalito\UxSearchBundle\Search\Query;
-use Mezcalito\UxSearchBundle\Search\SearchInterface;
+use Survos\SearchBundle\Search\Filter\FilterInterface;
+use Survos\SearchBundle\Search\Filter\RangeFilter;
+use Survos\SearchBundle\Search\Filter\TermFilter;
+use Survos\SearchBundle\Search\Query;
+use Survos\SearchBundle\Search\SearchInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 

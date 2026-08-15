@@ -5,6 +5,11 @@
          colors="true"
          failOnWarning="true"
          failOnDeprecation="true">
+    <php>
+        <env name="APP_ENV" value="test" />
+        <env name="KERNEL_CLASS" value="Survos\SearchBundle\Tests\TestApplication\Kernel" />
+        <server name="SHELL_VERBOSITY" value="-1" />
+    </php>
     <testsuites>
         <testsuite name="search-bundle">
             <directory>tests</directory>

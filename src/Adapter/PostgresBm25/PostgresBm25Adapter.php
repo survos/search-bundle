@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Adapter\PostgresBm25;
 
 use Doctrine\DBAL\Connection;
-use Mezcalito\UxSearchBundle\Adapter\AdapterInterface;
-use Mezcalito\UxSearchBundle\Search\Filter\RangeFilter;
-use Mezcalito\UxSearchBundle\Search\Filter\TermFilter;
-use Mezcalito\UxSearchBundle\Search\Query;
-use Mezcalito\UxSearchBundle\Search\ResultSet\FacetStat;
-use Mezcalito\UxSearchBundle\Search\ResultSet\FacetTermDistribution;
-use Mezcalito\UxSearchBundle\Search\ResultSet\Hit;
-use Mezcalito\UxSearchBundle\Search\ResultSet\ResultSet;
-use Mezcalito\UxSearchBundle\Search\SearchInterface;
+use Survos\SearchBundle\Adapter\AdapterInterface;
+use Survos\SearchBundle\Search\Filter\RangeFilter;
+use Survos\SearchBundle\Search\Filter\TermFilter;
+use Survos\SearchBundle\Search\Query;
+use Survos\SearchBundle\Search\ResultSet\FacetStat;
+use Survos\SearchBundle\Search\ResultSet\FacetTermDistribution;
+use Survos\SearchBundle\Search\ResultSet\Hit;
+use Survos\SearchBundle\Search\ResultSet\ResultSet;
+use Survos\SearchBundle\Search\SearchInterface;
 use Survos\SearchBundle\Adapter\DbalAdapterTrait;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Contracts\Cache\CacheInterface;
@@ -201,7 +201,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
         foreach ($search->getFacets() as $facet) {
             $component = $facet->getDisplayComponent();
             if ($component === null
-                || !is_subclass_of($component, \Mezcalito\UxSearchBundle\Twig\Components\Facet\AbstractFacet::class)
+                || !is_subclass_of($component, \Survos\SearchBundle\Twig\Components\Facet\AbstractFacet::class)
                 || !$component::usesFacetStats()) {
                 continue;
             }

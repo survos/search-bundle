@@ -1,0 +1,27 @@
+{% block content %}
+    <div {{ attributes.defaults({
+        class: 'ux-search-hits'
+    }) }}>
+        {% if results.hits|length > 0 %}
+            <div class="ux-search-hits__list vstack gap-3">
+                {% for hit in results.hits %}
+                    {% block hit %}
+                        <div class="ux-search-hits__item card">
+                            <div class="card-body p-2" style="max-width: 100%; overflow: auto;">
+                                <pre class="mb-0" style="font-family: monospace">{{ hit.data|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+                            </div>
+                        </div>
+                    {% endblock %}
+                {% endfor %}
+            </div>
+        {% else %}
+            {% block noResult %}
+                <div class="ux-search-hits__no-result empty">
+                    <div class="empty-body">
+                        {{ 'no_result'|trans(domain='survos_search') }}
+                    </div>
+                </div>
+            {% endblock %}
+        {% endif %}
+    </div>
+{% endblock %}

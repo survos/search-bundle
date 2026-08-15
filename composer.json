@@ -1,13 +1,13 @@
 {
     "name": "survos/search-bundle",
-    "description": "Field-driven Symfony UX search adapters, including SQLite FTS5 and PostgreSQL BM25 backends.",
+    "description": "First-party Symfony search kernel and faceted UX with field-driven Doctrine, Meilisearch, Algolia, SQLite FTS5, PostgreSQL BM25, and Elasticsearch adapters.",
     "type": "symfony-bundle",
     "license": "MIT",
     "require": {
         "php": "^8.5",
         "doctrine/dbal": "^4.3",
         "doctrine/doctrine-bundle": "^2.14|^3.0",
-        "tacman/ux-search": "^1.0",
+        "elasticsearch/elasticsearch": "^9.0",
         "survos/kit-bundle": "^2.5",
         "survos/field-bundle": "^2.5",
         "symfony/config": "^8.1",
@@ -18,8 +18,16 @@
         "symfony/cache-contracts": "^3.6",
         "symfony/service-contracts": "^3.6",
         "symfony/string": "^8.1",
-        "symfony/ux-twig-component": "^3.0",
-        "twig/twig": "^3.4|^4.0"
+        "symfony/ux-twig-component": "^3.4",
+        "twig/twig": "^3.4|^4.0",
+        "nyholm/psr7": "^1.0",
+        "phpdocumentor/reflection-docblock": "^5.4|^6.0",
+        "symfony/asset": "^8.1",
+        "symfony/http-client": "^8.1",
+        "symfony/serializer": "^8.1",
+        "symfony/ux-live-component": "^3.4",
+        "symfony/ux-icons": "^3.4",
+        "symfony/translation": "^8.1"
     },
     "autoload": {
         "psr-4": {
@@ -28,7 +36,8 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Survos\\SearchBundle\\Tests\\": "tests/"
+            "Survos\\SearchBundle\\Tests\\": "tests/",
+            "Survos\\SearchBundle\\Tests\\TestApplication\\": "tests/TestApplication/src/"
         }
     },
     "extra": {
@@ -38,7 +47,24 @@
         }
     },
     "require-dev": {
+        "doctrine/orm": "^3.4",
         "phpstan/phpstan": "^2.1",
-        "phpunit/phpunit": "^13.0"
+        "phpunit/phpunit": "^13.0",
+        "algolia/algoliasearch-client-php": "^4.37",
+        "friendsofphp/php-cs-fixer": "^3.64",
+        "meilisearch/meilisearch-php": "^1.10",
+        "phpstan/phpstan-symfony": "^2.0",
+        "rector/rector": "^2.3",
+        "symfony/asset-mapper": "^8.1",
+        "symfony/framework-bundle": "^8.1",
+        "symfony/maker-bundle": "^1.62",
+        "symfony/runtime": "^8.1",
+        "symfony/var-exporter": "^8.1",
+        "symfony/web-profiler-bundle": "^8.1"
+    },
+    "config": {
+        "allow-plugins": {
+            "symfony/runtime": true
+        }
     }
 }

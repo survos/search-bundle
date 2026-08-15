@@ -1,0 +1,111 @@
+{%- macro page_item(iterator, page) %}
+    {%- if page == iterator %}
+        <li class="page-item active" aria-current="page">
+            <span class="page-link">{{ iterator }}</span>
+        </li>
+    {% else %}
+        <li class="page-item">
+            <a
+                class="page-link"
+                href="?page={{ iterator }}"
+                data-action="live#action:prevent"
+                data-live-action-param="changeCurrentPage"
+                data-live-page-param="{{ iterator }}"
+            >
+                {{ iterator }}
+            </a>
+        </li>
+    {% endif -%}
+{% endmacro -%}
+
+{%- macro ellipsis() %}
+    <li class="page-item disabled">
+        <span class="page-link">…</span>
+    </li>
+{% endmacro -%}
+
+{%- block content %}
+    {%- if totalPage > 1 %}
+        <nav {{ attributes.defaults({
+            class: 'ux-search-pagination d-flex justify-content-center mt-4'
+        }) }} aria-label="{{ 'pagination'|trans(domain='survos_search') }}">
+            <ul class="pagination pagination-outline gap-2 mb-0">
+
+                {% if (page - 1) >= 1 %}
+                    <li class="page-item">
+                        <a
+                            class="page-link"
+                            href="?page={{ page - 1 }}"
+                            data-action="live#action:prevent"
+                            data-live-action-param="changeCurrentPage"
+                            data-live-page-param="{{ page - 1 }}"
+                            rel="prev"
+                            aria-label="{{ 'pagination.previous_page'|trans(domain='survos_search') }}"
+                        >
+                            {{ ux_icon('tabler:chevron-left') }}
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">
+                            {{ ux_icon('tabler:chevron-left') }}
+                        </span>
+                    </li>
+                {% endif %}
+
+                {% if startRange > range %}
+                    {% for i in 1..range %}
+                        {{ _self.page_item(i, page) }}
+                    {% endfor %}
+                {% endif %}
+
+                {% if startRange - 1 == 1 %}
+                    {{ _self.page_item(1, page) }}
+                {% elseif startRange - 1 == range + 1 %}
+                    {{ _self.page_item(range + 1, page) }}
+                {% elseif startRange - 1 >= range + 2 %}
+                    {{ _self.ellipsis() }}
+                {% endif %}
+
+                {% for i in startRange..endRange %}
+                    {{ _self.page_item(i, page) }}
+                {% endfor %}
+
+                {% if endRange + range <= totalPage - range %}
+                    {{ _self.ellipsis() }}
+                {% elseif endRange + 1 == totalPage - (range + 1) %}
+                    {{ _self.page_item(endRange + 1, page) }}
+                {% endif %}
+
+                {% if endRange < totalPage %}
+                    {% for i in (totalPage - range + 1)..totalPage %}
+                        {{ _self.page_item(i, page) }}
+                    {% endfor %}
+                {% endif %}
+
+                {% if page < totalPage %}
+                    <li class="page-item">
+                        <a
+                            class="page-link"
+                            href="?page={{ page + 1 }}"
+                            data-action="live#action:prevent"
+                            data-live-action-param="changeCurrentPage"
+                            data-live-page-param="{{ page + 1 }}"
+                            rel="next"
+                            aria-label="{{ 'pagination.next_page'|trans(domain='survos_search') }}"
+                        >
+                            {{ ux_icon('tabler:chevron-right') }}
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">
+                            {{ ux_icon('tabler:chevron-right') }}
+                        </span>
+                    </li>
+                {% endif %}
+
+            </ul>
+        </nav>
+    {% endif -%}
+{% endblock -%}

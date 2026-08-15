@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Twig;
 
-use Mezcalito\UxSearchBundle\Context\ContextProvider;
+use Survos\SearchBundle\Context\ContextProvider;
 use Survos\FieldBundle\Model\FieldDescriptor;
 use Survos\FieldBundle\Service\FieldReader;
 use Survos\SearchBundle\Search\HitTemplateSearchInterface;

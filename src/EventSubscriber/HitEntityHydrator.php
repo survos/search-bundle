@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\EventSubscriber;
 
 use Doctrine\Persistence\ManagerRegistry;
-use Mezcalito\UxSearchBundle\Event\PostSearchEvent;
+use Survos\SearchBundle\Event\PostSearchEvent;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**

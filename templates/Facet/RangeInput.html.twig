@@ -1,0 +1,114 @@
+<fieldset {{ attributes.defaults({
+    'class': 'ux-search-facet ux-search-range-input card',
+    'data-ux-search-facet-collapsed': (this.collapsible and this.collapsed) ? 'true' : 'false',
+    'data-ux-search-facet-expand-label': 'facet.expand'|trans({'%facet%': label}, domain='survos_search'),
+    'data-ux-search-facet-collapse-label': 'facet.collapse'|trans({'%facet%': label}, domain='survos_search'),
+    'data-skip-morph': true
+}) }}>
+    <legend class="ux-search-facet__title card-header d-flex align-items-center justify-content-between gap-2">
+        <span class="ux-search-facet__title-group d-inline-flex align-items-center gap-1 min-w-0">
+            <span
+                class="ux-search-facet__title-text"
+                {% if this.collapsible %}
+                    role="button"
+                    tabindex="0"
+                    aria-expanded="{{ this.collapsed ? 'false' : 'true' }}"
+                    aria-controls="{{ property }}-facet-panel"
+                    data-ux-search-facet-toggle
+                    data-action="
+                        click->ux-search#toggleFacetCollapse
+                        keydown.enter->ux-search#toggleFacetCollapse
+                        keydown.space->ux-search#toggleFacetCollapse
+                    "
+                {% endif %}
+            >
+                {% block label %}
+                    {{ label }}
+                {% endblock %}
+            </span>
+            {% if this.collapsible %}
+                <button
+                    class="ux-search-facet__collapse btn btn-action btn-sm"
+                    type="button"
+                    aria-expanded="{{ this.collapsed ? 'false' : 'true' }}"
+                    aria-controls="{{ property }}-facet-panel"
+                    data-ux-search-facet-toggle
+                    data-action="ux-search#toggleFacetCollapse"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                    <span class="ux-search-sr-only" data-ux-search-facet-label>
+                        {{ (this.collapsed ? 'facet.expand' : 'facet.collapse')|trans({'%facet%': label}, domain='survos_search') }}
+                    </span>
+                </button>
+            {% endif %}
+        </span>
+    </legend>
+
+    <div
+        class="card-body ux-search-facet__panel"
+        id="{{ property }}-facet-panel"
+        data-ux-search-facet-panel
+        {% if this.collapsible and this.collapsed %}hidden{% endif %}
+    >
+        {% block form %}
+            <form
+                class="ux-search-range-input__form d-flex flex-column gap-2"
+                data-action="submit->ux-search#updateFacetRange:prevent"
+                data-ux-search-property-param="{{ property }}"
+                data-ux-search-range-min-param="{{ facetStat.min }}"
+                data-ux-search-range-max-param="{{ facetStat.max }}"
+            >
+                <div class="ux-search-range-input__box">
+                    <label
+                        class="ux-search-range-input__label ux-search-sr-only"
+                        for="{{ property }}-min"
+                    >
+                        {{ 'range.min'|trans(domain='survos_search') }}
+                    </label>
+
+                    <input
+                        class="ux-search-range-input__input ux-search-input form-control"
+                        type="number"
+                        min="{{ facetStat.min }}"
+                        max="{{ facetStat.max }}"
+                        id="{{ property }}-min"
+                        name="{{ property }}-min"
+                        placeholder="{{ facetStat.min }}"
+                        value="{{ facetStat.userMin }}"
+                        step="any"
+                    >
+                </div>
+
+                <div class="ux-search-range-input__box">
+                    <label
+                        class="ux-search-range-input__label ux-search-sr-only"
+                        for="{{ property }}-max"
+                    >
+                        {{ 'range.max'|trans(domain='survos_search') }}
+                    </label>
+
+                    <input
+                        class="ux-search-range-input__input ux-search-input form-control"
+                        type="number"
+                        min="{{ facetStat.min }}"
+                        max="{{ facetStat.max }}"
+                        id="{{ property }}-max"
+                        name="{{ property }}-max"
+                        placeholder="{{ facetStat.max }}"
+                        value="{{ facetStat.userMax }}"
+                        step="any"
+                    >
+                </div>
+
+                {% block submit %}
+                    <button
+                        class="ux-search-range-input__submit ux-search-button btn btn-primary"
+                        type="submit"
+                    >
+                        {{ 'go'|trans(domain='survos_search') }}
+                    </button>
+                {% endblock %}
+            </form>
+        {% endblock %}
+    </div>
+</fieldset>

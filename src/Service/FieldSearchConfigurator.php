@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Service;
 
-use Mezcalito\UxSearchBundle\Search\SearchInterface;
-use Mezcalito\UxSearchBundle\Twig\Components\Facet\RangeInput;
-use Mezcalito\UxSearchBundle\Twig\Components\Facet\RangeSlider;
-use Mezcalito\UxSearchBundle\Twig\Components\Facet\RefinementList;
+use Survos\SearchBundle\Search\SearchInterface;
+use Survos\SearchBundle\Twig\Components\Facet\RangeInput;
+use Survos\SearchBundle\Twig\Components\Facet\RangeSlider;
+use Survos\SearchBundle\Twig\Components\Facet\RefinementList;
 use Survos\FieldBundle\Enum\Widget;
 use Survos\FieldBundle\Model\FieldDescriptor;
 use Survos\FieldBundle\Service\FieldReader;

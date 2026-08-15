@@ -1,0 +1,7 @@
+{% block content %}
+    <span {{ attributes.defaults({
+        'class': 'ux-search-total-hits text-capitalize'
+    }) }}>
+        {{ 'results'|trans({'%count%': totalHits}, domain='survos_search') }}
+    </span>
+{% endblock %}

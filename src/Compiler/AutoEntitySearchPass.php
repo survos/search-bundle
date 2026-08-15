@@ -7,7 +7,7 @@ namespace Survos\SearchBundle\Compiler;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping\Column;
 use Doctrine\Persistence\ManagerRegistry;
-use Mezcalito\UxSearchBundle\Search\SearchProvider;
+use Survos\SearchBundle\Search\SearchProvider;
 use Survos\FieldBundle\Registry\EntityMetaRegistry;
 use Survos\SearchBundle\Model\UxSearchDescriptor;
 use Survos\SearchBundle\Registry\UxSearchRegistry;
@@ -92,7 +92,7 @@ final class AutoEntitySearchPass implements CompilerPassInterface
                     ->setArgument('$fieldNames', $fieldNames)
                     ->setArgument('$managerRegistry', new Reference(ManagerRegistry::class))
                     ->setArgument('$defaultAdapterDsn', $defaultAdapterDsn)
-                    ->addTag('mezcalito_ux_search.search', [
+                    ->addTag('survos_search.search', [
                         'index' => $class,
                         'name' => $code,
                         'adapter' => null,
@@ -141,12 +141,12 @@ final class AutoEntitySearchPass implements CompilerPassInterface
 
     private function defaultAdapterDsn(ContainerBuilder $container): ?string
     {
-        if (!$container->hasParameter('mezcalito_ux_search.default_adapter') || !$container->hasParameter('mezcalito_ux_search.adapters')) {
+        if (!$container->hasParameter('survos_search.default_adapter') || !$container->hasParameter('survos_search.adapters')) {
             return null;
         }
 
-        $defaultAdapter = (string) $container->getParameter('mezcalito_ux_search.default_adapter');
-        $adapters = $container->getParameter('mezcalito_ux_search.adapters');
+        $defaultAdapter = (string) $container->getParameter('survos_search.default_adapter');
+        $adapters = $container->getParameter('survos_search.adapters');
         if (!is_array($adapters)) {
             return null;
         }

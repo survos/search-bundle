@@ -1,0 +1,87 @@
+<div {{ attributes.defaults({
+    'class': 'ux-search',
+    'data-controller': 'ux-search',
+    'data-loading': 'addClass(ux-search--is-loading)'
+}) }}>
+    {% block content %}
+        <div class="ux-search__inner">
+            <div class="ux-search__header">
+                <div class="ux-search__form">
+                    {% block form %}
+                        <twig:Survos:Search:SearchInput />
+                    {% endblock %}
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <twig:Survos:Search:HitsPerPage />
+                    <twig:Survos:Search:SortBy />
+                </div>
+            </div>
+
+            <div class="ux-search__toolbar">
+                {% block toolbar %}
+                    <div class="d-flex align-items-end gap-2 flex-wrap">
+                        <twig:Survos:Search:CurrentRefinements />
+                        <twig:Survos:Search:ClearRefinements />
+                    </div>
+                {% endblock %}
+                <div class="ux-search__stats">
+                    {% block stats %}
+                        <twig:Survos:Search:TotalHits/>
+                    {% endblock %}
+                </div>
+            </div>
+
+            <div
+                class="ux-search__facets offcanvas-md offcanvas-start"
+                tabindex="-1"
+                id="uxSearchFacets"
+            >
+                <div class="offcanvas-header">
+                    <h5 class="offcanvas-title fw-bold">
+                        Filters
+                    </h5>
+
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="offcanvas"
+                        data-bs-target="#uxSearchFacets"
+                    ></button>
+                </div>
+
+                <div class="offcanvas-body">
+                    {% for facet in search.facets %}
+                        <twig:Survos:Search:Facet :property="facet.property" />
+                    {% endfor %}
+                </div>
+
+                <div class="offcanvas-footer">
+                    <twig:Survos:Search:ClearRefinements />
+                </div>
+            </div>
+
+            <div class="ux-search__listing">
+                {% block listing %}
+                    {% block hits %}
+                        <twig:Survos:Search:Hits />
+                    {% endblock %}
+
+                    {% block pagination %}
+                        <twig:Survos:Search:Pagination />
+                    {% endblock %}
+                {% endblock %}
+            </div>
+        </div>
+
+        <button
+            type="button"
+            class="btn btn-primary btn-filter-offcanvas d-md-none"
+            data-bs-toggle="offcanvas"
+            data-bs-target="#uxSearchFacets"
+            aria-controls="uxSearchFacets"
+        >
+            {{ ux_icon('tabler:adjustments-horizontal', { class: 'icon me-1' }) }}
+            Filters
+        </button>
+    {% endblock %}
+</div>

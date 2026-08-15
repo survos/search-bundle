@@ -1,0 +1,31 @@
+<?php
+
+/*
+ * This file is part of the UxSearch project.
+ *
+ * (c) Mezcalito (https://www.mezcalito.fr)
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
+declare(strict_types=1);
+
+use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
+
+return static function (RoutingConfigurator $routes) {
+    $routes->import(
+        resource: [
+            'path' => '../src/Controller/',
+            'namespace' => 'Survos\\SearchBundle\\Tests\\TestApplication\\Controller',
+        ],
+        type: 'attribute'
+    );
+
+    $routes->import('@LiveComponentBundle/config/routes.php')->prefix('/_components');
+
+    if ('dev' === $routes->env()) {
+        $routes->import('@WebProfilerBundle/Resources/config/routing/wdt.php')->prefix('/_wdt');
+        $routes->import('@WebProfilerBundle/Resources/config/routing/profiler.php')->prefix('/_profiler');
+    }
+};

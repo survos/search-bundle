@@ -1,0 +1,204 @@
+{% set valuesCount = distribution.values|length %}
+{% set hasMultipleValues = valuesCount > 1 %}
+{% set hasShowMore = valuesCount > this.limit %}
+<fieldset {{ attributes.defaults({
+    class: 'ux-search-facet ux-search-refinement-list',
+    'data-skip-morph': true,
+    'data-controller': 'ux-search--refinement-list',
+    'data-ux-search--refinement-list-limit-value': this.limit,
+    'data-ux-search--refinement-list-value-type-value': this.valueType|default('auto'),
+    'data-ux-search-facet-collapsed': (this.collapsible and this.collapsed) ? 'true' : 'false',
+    'data-ux-search-facet-expand-label': 'facet.expand'|trans({'%facet%': label}, domain='survos_search'),
+    'data-ux-search-facet-collapse-label': 'facet.collapse'|trans({'%facet%': label}, domain='survos_search'),
+    'data-ux-search--refinement-list-show-more-label-value': 'show_more'|trans(domain='survos_search'),
+    'data-ux-search--refinement-list-show-less-label-value': 'show_less'|trans(domain='survos_search')
+}) }}>
+    <legend class="ux-search-facet__title ux-search-refinement-list__title ux-search-refinement-list__header d-flex align-items-center justify-content-between gap-2">
+        <span class="ux-search-facet__title-group ux-search-refinement-list__title-group d-inline-flex align-items-center gap-1 min-w-0">
+            <span
+                class="ux-search-facet__title-text ux-search-refinement-list__title-text"
+                {% if this.collapsible %}
+                    role="button"
+                    tabindex="0"
+                    aria-expanded="{{ this.collapsed ? 'false' : 'true' }}"
+                    aria-controls="{{ property }}-facet-panel"
+                    data-ux-search-facet-toggle
+                    data-action="
+                        click->ux-search#toggleFacetCollapse
+                        keydown.enter->ux-search#toggleFacetCollapse
+                        keydown.space->ux-search#toggleFacetCollapse
+                    "
+                {% endif %}
+            >{% block label %}{{ label }}{% endblock %}</span>
+            {% if this.collapsible %}
+                <button
+                    class="ux-search-facet__collapse ux-search-refinement-list__collapse btn btn-action btn-sm"
+                    type="button"
+                    aria-expanded="{{ this.collapsed ? 'false' : 'true' }}"
+                    aria-controls="{{ property }}-facet-panel"
+                    data-ux-search-facet-toggle
+                    data-action="ux-search#toggleFacetCollapse"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                    <span class="ux-search-sr-only" data-ux-search-facet-label>
+                        {{ (this.collapsed ? 'facet.expand' : 'facet.collapse')|trans({'%facet%': label}, domain='survos_search') }}
+                    </span>
+                </button>
+            {% endif %}
+        </span>
+        {% if hasMultipleValues %}
+            {% block sort %}
+                {% set countDescLabel = 'facet.sort_options.count_desc'|trans(domain='survos_search') %}
+                {% set countAscLabel = 'facet.sort_options.count_asc'|trans(domain='survos_search') %}
+                {% set stringAscLabel = 'facet.sort_options.string_asc'|trans(domain='survos_search') %}
+                {% set stringDescLabel = 'facet.sort_options.string_desc'|trans(domain='survos_search') %}
+                {% set numberAscLabel = 'facet.sort_options.number_asc'|trans(domain='survos_search') %}
+                {% set numberDescLabel = 'facet.sort_options.number_desc'|trans(domain='survos_search') %}
+                {% set dateDescLabel = 'facet.sort_options.date_desc'|trans(domain='survos_search') %}
+                {% set dateAscLabel = 'facet.sort_options.date_asc'|trans(domain='survos_search') %}
+                <label class="ux-search-sr-only" for="{{ property }}-facet-sort">
+                    {{ 'facet.sort'|trans({'%facet%': label}, domain='survos_search') }}
+                </label>
+                <div class="ux-search-refinement-list__sort dropdown">
+                    <select
+                        class="ux-search-sr-only"
+                        id="{{ property }}-facet-sort"
+                        tabindex="-1"
+                        aria-hidden="true"
+                        data-ux-search--refinement-list-target="sort"
+                        data-action="change->ux-search--refinement-list#sort"
+                    >
+                        <option value="count_desc">{{ countDescLabel }}</option>
+                        <option value="count_asc">{{ countAscLabel }}</option>
+                        <option value="string_asc" data-ux-search--refinement-list-target="sortOption" data-value-type="string">{{ stringAscLabel }}</option>
+                        <option value="string_desc" data-ux-search--refinement-list-target="sortOption" data-value-type="string">{{ stringDescLabel }}</option>
+                        <option value="number_asc" data-ux-search--refinement-list-target="sortOption" data-value-type="number">{{ numberAscLabel }}</option>
+                        <option value="number_desc" data-ux-search--refinement-list-target="sortOption" data-value-type="number">{{ numberDescLabel }}</option>
+                        <option value="date_desc" data-ux-search--refinement-list-target="sortOption" data-value-type="date">{{ dateDescLabel }}</option>
+                        <option value="date_asc" data-ux-search--refinement-list-target="sortOption" data-value-type="date">{{ dateAscLabel }}</option>
+                    </select>
+                    <button
+                        class="ux-search-refinement-list__sort-toggle btn btn-action btn-sm dropdown-toggle"
+                        type="button"
+                        title="{{ countDescLabel }}"
+                        aria-label="{{ countDescLabel }}"
+                        data-bs-toggle="dropdown"
+                        data-ux-search--refinement-list-target="sortToggle"
+                    >
+                        <span class="ux-search-refinement-list__sort-icon" data-ux-search--refinement-list-target="sortIcon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16h2"/><path d="M11 12h2"/><path d="M15 8h2"/></svg>
+                        </span>
+                    </button>
+                    <div class="ux-search-refinement-list__sort-menu dropdown-menu dropdown-menu-end">
+                        <button class="dropdown-item d-flex align-items-center gap-2 active" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="count_desc" data-sort-label="{{ countDescLabel }}" data-action="ux-search--refinement-list#selectSort" aria-selected="true">
+                            <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16h2"/><path d="M11 12h2"/><path d="M15 8h2"/></svg></span>
+                            <span>{{ countDescLabel }}</span>
+                        </button>
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="count_asc" data-sort-label="{{ countAscLabel }}" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                            <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 8h2"/><path d="M11 12h2"/><path d="M15 16h2"/></svg></span>
+                            <span>{{ countAscLabel }}</span>
+                        </button>
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="string_asc" data-sort-label="{{ stringAscLabel }}" data-value-type="string" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                            <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M20 8h-5"/><path d="M15 4h5v8h-5"/></svg></span>
+                            <span>{{ stringAscLabel }}</span>
+                        </button>
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="string_desc" data-sort-label="{{ stringDescLabel }}" data-value-type="string" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                            <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M15 4h5l-5 8h5"/></svg></span>
+                            <span>{{ stringDescLabel }}</span>
+                        </button>
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="number_asc" data-sort-label="{{ numberAscLabel }}" data-value-type="number" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                            <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M17 10V4h-2"/><path d="M15 20h4v-6h-4z"/></svg></span>
+                            <span>{{ numberAscLabel }}</span>
+                        </button>
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="number_desc" data-sort-label="{{ numberDescLabel }}" data-value-type="number" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                            <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M17 14v6h-2"/><path d="M15 10h4V4h-4z"/></svg></span>
+                            <span>{{ numberDescLabel }}</span>
+                        </button>
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="date_desc" data-sort-label="{{ dateDescLabel }}" data-value-type="date" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                            <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 3 3 3-3"/></svg></span>
+                            <span>{{ dateDescLabel }}</span>
+                        </button>
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="date_asc" data-sort-label="{{ dateAscLabel }}" data-value-type="date" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                            <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 17 3-3 3 3"/></svg></span>
+                            <span>{{ dateAscLabel }}</span>
+                        </button>
+                    </div>
+                </div>
+            {% endblock %}
+        {% endif %}
+    </legend>
+    <div
+        class="ux-search-refinement-list__panel"
+        id="{{ property }}-facet-panel"
+        data-ux-search-facet-panel
+        {% if this.collapsible and this.collapsed %}hidden{% endif %}
+    >
+        {% if this.searchable and hasShowMore %}
+            {% block search %}
+                <div class="ux-search-refinement-list__search">
+                    <label class="ux-search-sr-only" for="{{ property }}-facet-search">
+                        {{ 'facet.search'|trans({'%facet%': label}, domain='survos_search') }}
+                    </label>
+                    <input
+                        class="ux-search-refinement-list__search-input ux-search-input form-control form-control-sm"
+                        type="search"
+                        id="{{ property }}-facet-search"
+                        placeholder="{{ 'facet.search_placeholder'|trans(domain='survos_search') }}"
+                        autocomplete="off"
+                        data-ux-search--refinement-list-target="searchInput"
+                        data-action="input->ux-search--refinement-list#search"
+                    >
+                </div>
+            {% endblock %}
+        {% endif %}
+        {% block list %}
+            <ul class="ux-search-refinement-list__list" data-ux-search--refinement-list-target="list">
+                {%- for key,value in distribution.values %}
+                    <li
+                        class="ux-search-refinement-list__item{{ loop.index > this.limit ? ' ux-search-refinement-list__item--exceed-limit' }}"
+                        data-ux-search--refinement-list-target="item"
+                    >
+                        <input
+                            class="ux-search-refinement-list__input"
+                            value="{{ key }}"
+                            type="checkbox"
+                            id="{{ property }}-{{ key }}"
+                            {%- if distribution.isChecked(key) %} checked {% endif -%}
+                            data-action="live#action"
+                            data-live-action-param="toggleFacetTerm"
+                            data-live-property-param="{{ property }}"
+                            data-live-value-param="{{ key }}"
+                        >
+                        <label class="ux-search-refinement-list__label" for="{{ property }}-{{ key }}">
+                            <span class="ux-search-refinement-list__label-text" data-ux-search--refinement-list-target="label">{{ key }}</span>
+                            <span class="ux-search-refinement-list__count" data-ux-search--refinement-list-target="count">{{ value }}</span>
+                        </label>
+                    </li>
+                {% endfor -%}
+            </ul>
+        {% endblock %}
+        {% if this.searchable and hasShowMore %}
+            {% block no_results %}
+                <p
+                    class="ux-search-refinement-list__no-results text-secondary small"
+                    data-ux-search--refinement-list-target="noResults"
+                    hidden
+                >
+                    {{ 'facet.no_search_results'|trans(domain='survos_search') }}
+                </p>
+            {% endblock %}
+        {% endif %}
+        {% if hasShowMore %}
+            {% block show_more %}
+                <button
+                    class="ux-search-refinement-list__show-more"
+                    type="button"
+                    data-ux-search--refinement-list-target="toggle"
+                    data-action="ux-search--refinement-list#toggleShowMore"
+                >
+                    {{ 'show_more'|trans(domain='survos_search') }}
+                </button>
+            {% endblock %}
+        {% endif %}
+    </div>
+</fieldset>

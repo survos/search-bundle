@@ -7,8 +7,8 @@ namespace Survos\SearchBundle\Adapter\SqliteFts5;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\Persistence\ManagerRegistry;
-use Mezcalito\UxSearchBundle\Adapter\AdapterFactoryInterface;
-use Mezcalito\UxSearchBundle\Adapter\AdapterInterface;
+use Survos\SearchBundle\Adapter\AdapterFactoryInterface;
+use Survos\SearchBundle\Adapter\AdapterInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 
 final readonly class SqliteFts5Factory implements AdapterFactoryInterface

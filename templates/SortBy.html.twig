@@ -1,0 +1,14 @@
+{% block content %}
+    <div {{ attributes.defaults({
+        'class': 'ux-search-sort-by ux-search-select'
+    }) }}>
+        <div class="form-label">Sort By</div>
+        <select class="form-select" data-model="query.activeSort">
+            {% for option in availableSorts %}
+                <option value="{{ option.key }}" {% if option.key == activeSort %}selected{% endif %}>
+                    {{ option.label }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+{% endblock %}

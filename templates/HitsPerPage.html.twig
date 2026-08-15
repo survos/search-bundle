@@ -1,0 +1,14 @@
+{% block content %}
+    <div {{ attributes.defaults({
+        'class': 'ux-search-hits-per-page ux-search-select'
+    }) }}>
+        <div class="form-label">Per Page</div>
+        <select class="form-select" data-model="query.activeHitsPerPage">
+            {% for option in availableHitsPerPage %}
+                <option value="{{ option }}" {% if option == activeHitPerPage %}selected{% endif %}>
+                    {{ option }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+{% endblock %}

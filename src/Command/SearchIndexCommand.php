@@ -8,9 +8,11 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\Persistence\ManagerRegistry;
-use Mezcalito\UxSearchBundle\Adapter\AdapterProvider;
-use Mezcalito\UxSearchBundle\Search\SearchProvider;
+use Survos\SearchBundle\Adapter\AdapterProvider;
+use Survos\SearchBundle\Search\SearchProvider;
 use Survos\SearchBundle\Registry\UxSearchRegistry;
+use Survos\SearchBundle\Contract\EmbeddingProviderInterface;
+use Survos\SearchBundle\Contract\IndexingAdapterInterface;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
@@ -36,6 +38,10 @@ final class SearchIndexCommand
         bool $drop = false,
         #[Option('Rebuild/populate the index after ensuring the schema exists')]
         bool $rebuild = true,
+        #[Option('Documents per Elasticsearch bulk request')]
+        int $batchSize = 250,
+        #[Option('Maximum documents to index')]
+        ?int $limit = null,
     ): int {
         $descriptors = $code === null
             ? $this->uxSearchRegistry->all()
@@ -55,6 +61,21 @@ final class SearchIndexCommand
             $adapter->configureParameters($resolver);
             $parameters = $resolver->resolve($search->getAdapterParameters());
 
+            if ($adapter instanceof IndexingAdapterInterface) {
+                $this->ensureExternalIndex(
+                    $io,
+                    $adapter,
+                    $descriptor->class,
+                    $descriptor->code,
+                    $parameters,
+                    $drop,
+                    $rebuild,
+                    $batchSize,
+                    $limit,
+                );
+                continue;
+            }
+
             if (isset($parameters['ftsTable'])) {
                 $this->ensureSqliteFts($io, $descriptor->code, $parameters, $drop, $rebuild);
                 continue;
@@ -69,6 +90,184 @@ final class SearchIndexCommand
         }
 
         return Command::SUCCESS;
+    }
+
+    /** @param class-string $class
+     *  @param array<string, mixed> $parameters
+     */
+    private function ensureExternalIndex(
+        SymfonyStyle $io,
+        IndexingAdapterInterface $adapter,
+        string $class,
+        string $code,
+        array $parameters,
+        bool $drop,
+        bool $rebuild,
+        int $batchSize,
+        ?int $limit,
+    ): void {
+        if (!$adapter->ping()) {
+            throw new \RuntimeException(sprintf('Search backend for "%s" is unavailable.', $code));
+        }
+
+        $index = $this->externalIndexName($parameters['index'] ?? null, $code);
+        $mappings = is_array($parameters['mappings'] ?? null) ? $parameters['mappings'] : [];
+        $dimensions = $parameters['vectorDimensions'] ?? null;
+        if (is_int($dimensions)) {
+            $mappings[(string) $parameters['vectorField']] ??= [
+                'type' => 'dense_vector',
+                'dims' => $dimensions,
+                'index' => true,
+                'similarity' => $parameters['vectorSimilarity'],
+            ];
+        }
+        $adapter->ensureIndex($index, $mappings, $drop);
+
+        if (!$rebuild) {
+            $io->success(sprintf('%s: ensured external index %s', $code, $index));
+            return;
+        }
+
+        $count = $adapter->bulkIndex(
+            $index,
+            $this->externalDocuments($class, $parameters, $limit),
+            max(1, $batchSize),
+        );
+        $io->success(sprintf('%s: indexed %d documents into %s', $code, $count, $index));
+    }
+
+    /** @param class-string $class
+     *  @param array<string, mixed> $parameters
+     *  @return \Generator<int, array{id: string, document: array<string, mixed>}>
+     */
+    private function externalDocuments(string $class, array $parameters, ?int $limit): \Generator
+    {
+        $provider = $parameters['documentProvider'] ?? null;
+        if (is_callable($provider)) {
+            $provider = $provider();
+        }
+        if (!is_iterable($provider)) {
+            $manager = $this->managerRegistry->getManagerForClass($class);
+            if ($manager === null) {
+                throw new \LogicException(sprintf(
+                    'No documentProvider is configured and no Doctrine manager exists for %s.',
+                    $class,
+                ));
+            }
+            $provider = $manager->getRepository($class)->findAll();
+        }
+
+        $mapper = $parameters['documentMapper'] ?? null;
+        $fields = $parameters['sourceFields'] ?: $parameters['searchFields'];
+        $idField = (string) $parameters['idField'];
+        $embeddingProvider = $parameters['embeddingProvider'] ?? null;
+        $embeddingText = $parameters['embeddingText'] ?? null;
+        $vectorField = (string) $parameters['vectorField'];
+        $count = 0;
+
+        foreach ($provider as $source) {
+            if ($limit !== null && $count >= $limit) {
+                break;
+            }
+            $document = is_callable($mapper)
+                ? $mapper($source)
+                : $this->mapDocument($source, $fields);
+            if (!is_array($document)) {
+                throw new \UnexpectedValueException('documentMapper must return an array.');
+            }
+            $document = $this->normalizeDocument($document);
+
+            if (!isset($document[$vectorField]) && is_callable($embeddingText)) {
+                $text = $embeddingText($document);
+                if (is_string($text) && $text !== '') {
+                    if ($embeddingProvider instanceof EmbeddingProviderInterface) {
+                        $document[$vectorField] = $embeddingProvider->embed($text);
+                    } elseif (is_callable($embeddingProvider)) {
+                        $document[$vectorField] = $embeddingProvider($text);
+                    }
+                }
+            }
+
+            $id = $document[$idField] ?? $this->readValue($source, $idField);
+            if (!is_scalar($id) && !$id instanceof \Stringable) {
+                throw new \LogicException(sprintf('Unable to resolve scalar id field "%s".', $idField));
+            }
+            yield ['id' => (string) $id, 'document' => $document];
+            ++$count;
+        }
+    }
+
+    /** @param string[] $fields
+     *  @return array<string, mixed>
+     */
+    private function mapDocument(mixed $source, array $fields): array
+    {
+        $document = [];
+        foreach ($fields as $field) {
+            $name = preg_replace('/^[a-z]+\./', '', $field) ?? $field;
+            $document[$name] = $this->readValue($source, $name);
+        }
+
+        return $document;
+    }
+
+    private function readValue(mixed $source, string $field): mixed
+    {
+        if (is_array($source)) {
+            return $source[$field] ?? null;
+        }
+        if (!is_object($source)) {
+            return null;
+        }
+        foreach (['get' . ucfirst($field), 'is' . ucfirst($field), 'has' . ucfirst($field)] as $method) {
+            if (is_callable([$source, $method])) {
+                return $source->{$method}();
+            }
+        }
+        try {
+            return $source->{$field};
+        } catch (\Error) {
+            return null;
+        }
+    }
+
+    /** @param array<string, mixed> $document
+     *  @return array<string, mixed>
+     */
+    private function normalizeDocument(array $document): array
+    {
+        foreach ($document as $field => $value) {
+            $document[$field] = $this->normalizeValue($value);
+        }
+
+        return $document;
+    }
+
+    private function normalizeValue(mixed $value): mixed
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format(\DateTimeInterface::ATOM);
+        }
+        if ($value instanceof \BackedEnum) {
+            return $value->value;
+        }
+        if ($value instanceof \UnitEnum) {
+            return $value->name;
+        }
+        if ($value instanceof \Stringable) {
+            return (string) $value;
+        }
+        if (is_array($value)) {
+            return array_map($this->normalizeValue(...), $value);
+        }
+
+        return $value;
+    }
+
+    private function externalIndexName(mixed $configured, string $fallback): string
+    {
+        $name = is_string($configured) && $configured !== '' ? $configured : $fallback;
+        return trim(strtolower((string) preg_replace('/[^a-zA-Z0-9_-]+/', '-', $name)), '-');
     }
 
     /** @param array<string, mixed> $parameters */

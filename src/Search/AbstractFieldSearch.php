@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Search;
 
-use Mezcalito\UxSearchBundle\Search\AbstractSearch;
+use Survos\SearchBundle\Search\AbstractSearch;
 use Survos\SearchBundle\Service\FieldSearchConfigurator;
 use Symfony\Contracts\Service\Attribute\Required;
 

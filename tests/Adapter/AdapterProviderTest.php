@@ -1,0 +1,85 @@
+<?php
+
+/*
+ * This file is part of the UxSearch project.
+ *
+ * (c) Mezcalito (https://www.mezcalito.fr)
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
+declare(strict_types=1);
+
+namespace Survos\SearchBundle\Tests\Adapter;
+
+use Survos\SearchBundle\Adapter\AdapterFactoryInterface;
+use Survos\SearchBundle\Adapter\AdapterInterface;
+use Survos\SearchBundle\Adapter\AdapterProvider;
+use Survos\SearchBundle\Exception\AdapterException;
+use PHPUnit\Framework\TestCase;
+
+class AdapterProviderTest extends TestCase
+{
+    public function testGetAdapterReturnsDefaultAdapter(): void
+    {
+        $defaultAdapterName = 'default';
+        $adapterConfiguration = [
+            'default' => ['dsn' => 'meilisearch://localhost:7700'],
+        ];
+        $adapter = $this->createStub(AdapterInterface::class);
+
+        $factory = $this->createStub(AdapterFactoryInterface::class);
+        $factory->method('support')->willReturn(true);
+        $factory->method('createAdapter')->willReturn($adapter);
+
+        $provider = new AdapterProvider($defaultAdapterName, $adapterConfiguration, [$factory]);
+
+        $result = $provider->getAdapter();
+
+        $this->assertSame($adapter, $result);
+    }
+
+    public function testGetAdapterReturnsSpecifiedAdapter(): void
+    {
+        $adapterConfiguration = [
+            'custom' => ['dsn' => 'meilisearch://custom:7700'],
+        ];
+        $adapter = $this->createStub(AdapterInterface::class);
+
+        $factory = $this->createMock(AdapterFactoryInterface::class);
+        $factory->expects($this->once())->method('support')->with('meilisearch://custom:7700')->willReturn(true);
+        $factory->expects($this->once())->method('createAdapter')->with('meilisearch://custom:7700')->willReturn($adapter);
+
+        $provider = new AdapterProvider('default', $adapterConfiguration, [$factory]);
+
+        $result = $provider->getAdapter('custom');
+
+        $this->assertSame($adapter, $result);
+    }
+
+    public function testGetAdapterThrowsExceptionIfConfigurationNotFound(): void
+    {
+        $provider = new AdapterProvider('default', [], []);
+
+        $this->expectException(AdapterException::class);
+
+        $provider->getAdapter('nonexistent');
+    }
+
+    public function testGetAdapterThrowsExceptionIfNoFactorySupportsDsn(): void
+    {
+        $adapterConfiguration = [
+            'default' => ['dsn' => 'unsupported://localhost'],
+        ];
+
+        $factory = $this->createStub(AdapterFactoryInterface::class);
+        $factory->method('support')->willReturn(false);
+
+        $provider = new AdapterProvider('default', $adapterConfiguration, [$factory]);
+
+        $this->expectException(AdapterException::class);
+
+        $provider->getAdapter();
+    }
+}

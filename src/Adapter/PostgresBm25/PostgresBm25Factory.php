@@ -7,8 +7,8 @@ namespace Survos\SearchBundle\Adapter\PostgresBm25;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\Persistence\ManagerRegistry;
-use Mezcalito\UxSearchBundle\Adapter\AdapterFactoryInterface;
-use Mezcalito\UxSearchBundle\Adapter\AdapterInterface;
+use Survos\SearchBundle\Adapter\AdapterFactoryInterface;
+use Survos\SearchBundle\Adapter\AdapterInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 
 final readonly class PostgresBm25Factory implements AdapterFactoryInterface
