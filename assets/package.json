@@ -1,46 +1,38 @@
 {
   "name": "@survos/search-bundle",
-  "description": "Search interface for Symfony application",
-  "main": "dist/controller.js",
-  "types": "dist/controller.d.ts",
-  "version": "1.0.0",
+  "description": "Faceted search UI for Symfony applications",
   "license": "MIT",
+  "version": "1.0.0",
   "symfony": {
     "controllers": {
       "ux-search": {
-        "main": "dist/controller.js",
-        "name": "ux-search",
+        "main": "src/controller.js",
         "webpackMode": "eager",
         "fetch": "eager",
         "enabled": true,
         "autoimport": {
-          "@survos/search-bundle/dist/default.min.css": true
+          "@survos/search-bundle/styles/ux-search.css": true
         }
       },
       "ux-search--refinement-list": {
-        "main": "dist/controllers/refinement-list_controller.js",
-        "name": "ux-search--refinement-list",
+        "main": "src/controllers/refinement-list_controller.js",
         "webpackMode": "eager",
         "fetch": "eager",
         "enabled": true
       },
       "ux-search-range-slider": {
-        "main": "dist/controllers/range-slider_controller.js",
-        "name": "ux-search-range-slider",
+        "main": "src/controllers/range-slider_controller.js",
         "webpackMode": "eager",
         "fetch": "eager",
         "enabled": true
       }
     },
     "importmap": {
-      "@hotwired/stimulus": "^3.2.0",
-      "@survos/search-bundle": "path:%PACKAGE%/dist/controller.js"
-    }
+      "@hotwired/stimulus": "^3.2.0"
+    },
+    "autoimport": {}
   },
   "peerDependencies": {
-    "@hotwired/stimulus": "^3.2.0"
-  },
-  "devDependencies": {
     "@hotwired/stimulus": "^3.2.0"
   }
 }

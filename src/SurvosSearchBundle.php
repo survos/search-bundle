@@ -116,14 +116,21 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
             ->set(PostgresBm25Factory::class)
                 ->arg('$managerRegistry', new Reference(ManagerRegistry::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
                 ->tag('survos_search.adapter_factory')
-            ->set(ElasticsearchQueryBuilder::class)
-            ->set(ElasticsearchFactory::class)->tag('survos_search.adapter_factory')
             ->set(HitEntityHydrator::class)
             ->set(SearchExtension::class)
                 ->arg('$fieldReader', new Reference(FieldReader::class))
                 ->tag('twig.extension')
             ->set(SearchCreateCommand::class)->arg('$projectDir', '%kernel.project_dir%')->public()
             ->set(SearchIndexCommand::class)->public();
+
+        // The engine clients are `suggest`, not `require` -- an app using only the SQLite FTS5 or
+        // Postgres BM25 adapter must not pay for elasticsearch/elasticsearch and its transport
+        // (elastic/transport, open-telemetry/*, php-http/*). Register the adapter only when the
+        // client is actually installed, the same way the Tabler menu below is conditional.
+        if (class_exists(\Elastic\Elasticsearch\ClientBuilder::class)) {
+            $services->set(ElasticsearchQueryBuilder::class);
+            $services->set(ElasticsearchFactory::class)->tag('survos_search.adapter_factory');
+        }
 
         if (class_exists(\Survos\TablerBundle\Menu\AbstractAdminMenuSubscriber::class)) {
             $services->set(SearchMenuSubscriber::class)->autowire()->autoconfigure();
@@ -143,11 +150,12 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
 
     public function prependExtension(ContainerConfigurator $container, ContainerBuilder $builder): void
     {
-        if ($builder->hasExtension('twig')) {
-            $builder->prependExtensionConfig('twig', [
-                'paths' => [dirname(__DIR__).'/templates' => 'SurvosSearch'],
-            ]);
-        }
+        // No twig `paths` prepend here. Symfony already auto-registers @SurvosSearch from this
+        // bundle's templates/ dir, and -- crucially -- inserts the app's
+        // templates/bundles/SurvosSearchBundle/ ahead of it so overrides win. Prepending the
+        // bundle's own path put it *first*, permanently shadowing the app override slot: that's
+        // what stopped an app from customising the Hits `hit` block, which is the documented way
+        // to render real results instead of the debug JSON dump.
 
         $builder->prependExtensionConfig('twig_component', [
             'defaults' => [
@@ -161,7 +169,13 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
         if ($this->isAssetMapperAvailable($builder)) {
             $builder->prependExtensionConfig('framework', [
                 'asset_mapper' => [
-                    'paths' => [dirname(__DIR__).'/assets/dist' => '@survos/search-bundle'],
+                    // Map assets/, NOT assets/dist. assets/package.json is the npm package
+                    // manifest inherited from upstream, so its symfony.controllers `main` and
+                    // `autoimport` paths are relative to assets/ and carry a dist/ prefix
+                    // ("dist/controller.js"). Aliasing assets/dist made every one of those
+                    // resolve to assets/dist/dist/... -- StimulusBundle then silently registered
+                    // no controllers and imported no CSS, and the search rendered unstyled.
+                    'paths' => [dirname(__DIR__).'/assets' => '@survos/search-bundle'],
                 ],
             ]);
         }

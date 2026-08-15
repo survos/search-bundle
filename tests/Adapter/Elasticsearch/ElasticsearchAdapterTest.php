@@ -45,21 +45,6 @@ final class ElasticsearchAdapterTest extends TestCase
         self::assertSame('survos--json-rpc-bundle', $data['_id']);
     }
 
-    public function testBulkIndexBatchesAndRefreshes(): void
-    {
-        $client = $this->createMock(ElasticsearchClientInterface::class);
-        $client->expects(self::exactly(2))->method('bulk')->willReturn(['errors' => false]);
-        $client->expects(self::once())->method('refresh')->with('packages');
-
-        $adapter = new ElasticsearchAdapter($client, new ElasticsearchQueryBuilder());
-        $count = $adapter->bulkIndex('packages', [
-            ['id' => 'one', 'document' => ['name' => 'One']],
-            ['id' => 'two', 'document' => ['name' => 'Two']],
-            ['id' => 'three', 'document' => ['name' => 'Three']],
-        ], 2);
-
-        self::assertSame(3, $count);
-    }
 
     public function testHybridFallsBackToClientSideRrfOnLicenseError(): void
     {

@@ -109,9 +109,25 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
         $parameters['sortFields'] = [];
         $parameters['mappings'] = [];
 
+        $includedFields = [];
         foreach ($metadata->getFieldNames() as $field) {
             $type = $metadata->getTypeOfField($field);
             $isText = in_array($type, ['string', 'text', 'ascii_string'], true);
+
+            // A json column is either an array of scalars -- often the most useful facet
+            // there is (phpVersions, keywords) -- or a nested object blob. Doctrine reports
+            // both as 'json', and mapping a blob as `keyword` makes Elasticsearch reject the
+            // whole bulk request ("Expected text but found START_OBJECT"). We can't tell them
+            // apart from metadata, so json is opt-in: included only when it was explicitly
+            // named as a facet or a search field.
+            if (in_array($type, ['json', 'jsonb', 'array', 'simple_array'], true)
+                && !array_key_exists($field, $facetColumns)
+                && !in_array($field, $parameters['searchFields'], true)
+            ) {
+                continue;
+            }
+
+            $includedFields[] = $field;
             $parameters['mappings'][$field] = $isText
                 ? ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword', 'ignore_above' => 512]]]
                 : ['type' => match ($type) {
@@ -132,7 +148,7 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
 
         $parameters['index'] ??= strtolower($metadata->getTableName());
         $parameters['idField'] ??= $metadata->getSingleIdentifierFieldName();
-        $parameters['sourceFields'] ??= $metadata->getFieldNames();
+        $parameters['sourceFields'] ??= $includedFields;
         unset($parameters['facetColumns'], $parameters['sortColumns']);
         $this->setAdapterParameters($parameters);
     }

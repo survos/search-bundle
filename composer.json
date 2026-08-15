@@ -7,7 +7,6 @@
         "php": "^8.5",
         "doctrine/dbal": "^4.3",
         "doctrine/doctrine-bundle": "^2.14|^3.0",
-        "elasticsearch/elasticsearch": "^9.0",
         "survos/kit-bundle": "^2.5",
         "survos/field-bundle": "^2.5",
         "symfony/config": "^8.1",
@@ -47,13 +46,14 @@
         }
     },
     "require-dev": {
-        "doctrine/orm": "^3.4",
-        "phpstan/phpstan": "^2.1",
-        "phpunit/phpunit": "^13.0",
         "algolia/algoliasearch-client-php": "^4.37",
+        "doctrine/orm": "^3.4",
+        "elasticsearch/elasticsearch": "^9.0",
         "friendsofphp/php-cs-fixer": "^3.64",
         "meilisearch/meilisearch-php": "^1.10",
+        "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-symfony": "^2.0",
+        "phpunit/phpunit": "^13.0",
         "rector/rector": "^2.3",
         "symfony/asset-mapper": "^8.1",
         "symfony/framework-bundle": "^8.1",
@@ -66,5 +66,10 @@
         "allow-plugins": {
             "symfony/runtime": true
         }
+    },
+    "suggest": {
+        "elasticsearch/elasticsearch": "Needed for the Elasticsearch adapter. Index creation and population belong in survos/elastic-bundle; this client is only required to query.",
+        "meilisearch/meilisearch-php": "Needed for the Meilisearch adapter. Index lifecycle lives in survos/meili-bundle.",
+        "algolia/algoliasearch-client-php": "Needed for the Algolia adapter."
     }
 }

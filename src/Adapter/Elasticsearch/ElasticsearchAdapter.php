@@ -13,11 +13,10 @@ use Survos\SearchBundle\Search\ResultSet\FacetTermDistribution;
 use Survos\SearchBundle\Search\ResultSet\Hit;
 use Survos\SearchBundle\Search\ResultSet\ResultSet;
 use Survos\SearchBundle\Search\SearchInterface;
-use Survos\SearchBundle\Contract\IndexingAdapterInterface;
 use Survos\SearchBundle\Contract\EmbeddingProviderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
-final readonly class ElasticsearchAdapter implements AdapterInterface, IndexingAdapterInterface
+final readonly class ElasticsearchAdapter implements AdapterInterface
 {
     public function __construct(
         private ElasticsearchClientInterface $client,
@@ -139,64 +138,10 @@ final readonly class ElasticsearchAdapter implements AdapterInterface, IndexingA
             ]);
     }
 
-    public function ensureIndex(string $index, array $mappings, bool $drop = false): void
-    {
-        if ($drop && $this->client->indexExists($index)) {
-            $this->client->deleteIndex($index);
-        }
-        if (!$this->client->indexExists($index)) {
-            $this->client->createIndex($index, $mappings);
-        }
-    }
 
-    public function bulkIndex(string $index, iterable $documents, int $batchSize = 250): int
-    {
-        $body = [];
-        $count = 0;
-        foreach ($documents as $item) {
-            $body[] = ['index' => ['_index' => $index, '_id' => $item['id']]];
-            $body[] = $item['document'];
-            ++$count;
-            if (($count % $batchSize) === 0) {
-                $this->flush($body);
-                $body = [];
-            }
-        }
-        if ($body !== []) {
-            $this->flush($body);
-        }
-        if ($count > 0) {
-            $this->client->refresh($index);
-        }
 
-        return $count;
-    }
-
-    public function ping(): bool
-    {
-        return $this->client->ping();
-    }
 
     /** @param list<array<string, mixed>> $body */
-    private function flush(array $body): void
-    {
-        $response = $this->client->bulk($body);
-        if (!($response['errors'] ?? false)) {
-            return;
-        }
-
-        foreach (($response['items'] ?? []) as $item) {
-            $operation = is_array($item) ? reset($item) : null;
-            if (is_array($operation) && isset($operation['error'])) {
-                throw new \RuntimeException(sprintf(
-                    'Elasticsearch bulk indexing failed for document "%s": %s',
-                    $operation['_id'] ?? '?',
-                    json_encode($operation['error'], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-                ));
-            }
-        }
-        throw new \RuntimeException('Elasticsearch bulk indexing failed without item-level error details.');
-    }
 
     /** @param array<string, mixed> $response
      *  @return array{0: list<FacetTermDistribution>, 1: list<FacetStat>}
