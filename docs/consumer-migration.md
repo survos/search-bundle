@@ -1,6 +1,7 @@
 # Consumer migration after the ux-search absorption
 
-**Status:** mono done; the three apps not started.
+**Status:** DONE. mono, openfoto, harvest and zm are all migrated.
+Remaining: retire the package on Packagist, and the two follow-ups at the bottom.
 **Delete this file when the apps are migrated and the package is retired.**
 
 [ADR-0003](ux-search-absorption.md) absorbed `tacman/ux-search` into SearchBundle but
@@ -34,7 +35,7 @@ anything and reference classes that no longer exist.
 - [x] `bu/search-bundle` — `Maker/MakeSearch.php` pointed new users at upstream's docs URL;
       `docs/ux-search/create-own-adapter.md` sent contributors to upstream's issue tracker.
 
-## To do — the three apps
+## Done — the three apps
 
 Re-run the grep rather than trusting any list:
 
@@ -44,38 +45,44 @@ grep -rni 'mezcalito\|tacman/ux-search' ~/sites/{zm,openfoto,harvest} \
 ```
 
 **zm**
-- [ ] `composer.json` — drop `tacman/ux-search: ^1.0.10`; also carries a `repositories`
+- [x] `composer.json` — drop `tacman/ux-search: ^1.0.10`; also carries a `repositories`
       entry for `github.com/survos/search-bundle.git`
-- [ ] `config/packages/mezcalito_ux_search.yaml` — rename file and config root; its
+- [x] `config/packages/mezcalito_ux_search.yaml` — rename file and config root; its
       `default:` reads `%env(MEZCALITO_UX_SEARCH_DEFAULT_DSN)%`
-- [ ] `.env` lines 74–75 — the `MEZCALITO_UX_SEARCH_DEFAULT_DSN=doctrine://default` var and
+- [x] `.env` lines 74–75 — the `MEZCALITO_UX_SEARCH_DEFAULT_DSN=doctrine://default` var and
       the comment above it
-- [ ] `src/Search/DatasetArtifactSearch.php` (5 imports), `src/Search/FolioRowSearch.php` (4)
-- [ ] `templates/bundles/MezcalitoUxSearchBundle/{Hits.html.twig,Facet/RefinementList.html.twig}`
+- [x] `src/Search/DatasetArtifactSearch.php` (5 imports), `src/Search/FolioRowSearch.php` (4)
+- [x] `templates/bundles/MezcalitoUxSearchBundle/{Hits.html.twig,Facet/RefinementList.html.twig}`
       → `SurvosSearchBundle/`. `RefinementList` uses the parent-template form
       `{% extends '@!MezcalitoUxSearch/Facet/RefinementList.html.twig' %}`; `Hits` uses
       `domain='mezcalito_ux_search'`
-- [ ] `templates/search/index.html.twig`, `templates/home/index.html.twig` — `<twig:Mezcalito:UxSearch:Layout>`
-- [ ] `docs/landing-page-plan.md`, `docs/command/survosSearchCreate.md` — prose references
+- [x] `templates/search/index.html.twig`, `templates/home/index.html.twig` — `<twig:Mezcalito:UxSearch:Layout>`
+- [x] `docs/landing-page-plan.md`, `docs/command/survosSearchCreate.md` — prose references
 
-**openfoto** — has template overrides too, contrary to an earlier draft of this file:
-- [ ] `composer.json` — drop `tacman/ux-search: ^1.0.10`
-- [ ] `config/bundles.php:37` — remove the `MezcalitoUxSearchBundle` registration
-- [ ] `config/packages/mezcalito_ux_search.yaml`
-- [ ] `templates/bundles/MezcalitoUxSearchBundle/Hits.html.twig` — also uses
+**openfoto** — has a template override too, contrary to an earlier draft of this file:
+- [x] `composer.json` — drop `tacman/ux-search: ^1.0.10`
+- [x] `config/bundles.php:37` — remove the `MezcalitoUxSearchBundle` registration
+- [x] `config/packages/mezcalito_ux_search.yaml`
+- [x] `templates/bundles/MezcalitoUxSearchBundle/Hits.html.twig` — also uses
       `domain='mezcalito_ux_search'`
 
-**harvest** — lightest:
-- [ ] `composer.json` — drop `tacman/ux-search: ^1.0`
+**harvest** — also had `templates/bundles/MezcalitoUxSearchBundle/Hits.html.twig`, an
+importmap pair and a controllers.json block, plus a dead `MEZCALITO_UX_SEARCH_DEFAULT_DSN`
+in `.env` that nothing read (no `survos_search.yaml` here):
+- [x] `composer.json` — drop `tacman/ux-search: ^1.0`
 
 **Regenerated, don't hand-edit:** `config/reference.php` in zm and openfoto (psalm config
 types, includes `MezcalitoUxSearchConfig`), every `composer.lock`, and
 `openfoto/.idea/commandlinetools/*.xml` (IDE cache).
 
-No app references `@mezcalito/ux-search` in `importmap.php` or `assets/controllers.json` —
-the Stimulus side is contained inside the bundle.
+**Correction to an earlier draft of this file:** it claimed no app referenced the package in
+`importmap.php` or `assets/controllers.json`. Wrong — all three did, under the Composer name
+`@tacman/ux-search` rather than `@mezcalito/…`, which is what the original grep missed. Each
+needed an importmap `path` entry and a `controllers.json` block repointed at
+`@survos/search-bundle`, with the paths changing shape too (`assets/src`, `assets/styles`,
+no `dist/`). harvest also had a template override, which the earlier draft said it lacked.
 
-## Retire the package
+## Retire the package — still open
 
 - [ ] Mark `tacman/ux-search` abandoned on Packagist, replacement `survos/search-bundle`.
 - [ ] Archive `github.com/survos/ux-search`, or leave a README pointing at
@@ -102,8 +109,36 @@ Not everything matching the grep is wrong. Keep:
 
 ## Verification
 
-- [ ] The grep above returns nothing across the three apps.
-- [ ] zm's `/search` and home page render facets, pagination, sort, and the offcanvas.
-- [ ] openfoto search still works — it's the reference app.
-- [ ] folio's `folio_row` search registers (the `class_exists` guard was silently failing)
-      and `folio/search.html.twig` renders.
+- [x] The grep returns nothing across all three apps (ignoring generated lock/reference files,
+      an IDE cache, a stale Playwright log, and harvest's `.claude/worktrees/` copy).
+- [x] All three boot: `cache:clear` succeeds, `lint:twig` passes on every touched template.
+- [x] `@SurvosSearch` resolves the app override ahead of the bundle in each app.
+- [x] zm's searches all still register; openfoto's `folio_fts` adapter config survives.
+- [x] folio's `folio_row` registers again — it had been silently absent.
+- [ ] **Not done: no page was rendered over HTTP.** openfoto's and zm's dev servers were not
+      running and starting them unasked seemed worse than saying so. Load zm's `/search` and
+      home page, and an openfoto folio search, before trusting this.
+
+---
+
+## Follow-ups this migration surfaced
+
+**1. Duplicate `folio_row` search in zm.** `App\Search\FolioRowSearch` and
+`Survos\FolioBundle\Search\FolioRowSearch` both register under that name;
+`RegisterSearchPass` `array_combine()`s by name, so one silently shadows the other. The
+bundle's currently wins, which is the better outcome — the app copy is 301 diff lines behind
+(no `FolioFacetFieldResolver`, no config-driven `titleSortEnabled`/`defaultSort`, missing the
+`build()` re-entrancy fix). zm's copy is probably deletable.
+
+The collision was invisible until now because folio-bundle gated its own `FolioRowSearch` on
+`class_exists(\Mezcalito\UxSearchBundle\Search\AbstractSearch::class)`, so the bundle's
+version never registered at all. Worth considering whether `RegisterSearchPass` should throw
+on a duplicate name instead of silently dropping one.
+
+**2. `hitTemplate` should work without an app override.** openfoto and harvest both ship a
+`Hits.html.twig` override whose only job is to call `survos_hit_template()` — the Twig
+function search-bundle already provides, which reads
+`HitTemplateSearchInterface::getHitTemplate()`. The bundle's own `Hits.html.twig` ignores it
+and `json_encode`s the hit instead, so every app must copy the same override to get real
+result cards. Teaching the default template to use the hit template when the search provides
+one would delete that boilerplate from three apps.

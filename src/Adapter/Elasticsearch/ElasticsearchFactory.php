@@ -19,6 +19,7 @@ final readonly class ElasticsearchFactory implements AdapterFactoryInterface
     public function __construct(
         private ElasticsearchQueryBuilder $queryBuilder,
         private ?LoggerInterface $logger = null,
+        private ?ElasticsearchClientDecoratorInterface $clientDecorator = null,
     ) {}
 
     public function support(string $dsn): bool
@@ -53,8 +54,10 @@ final readonly class ElasticsearchFactory implements AdapterFactoryInterface
             );
         }
 
+        $client = new ElasticsearchClient($builder->build());
+
         return new ElasticsearchAdapter(
-            new ElasticsearchClient($builder->build()),
+            $this->clientDecorator?->decorate($client) ?? $client,
             $this->queryBuilder,
         );
     }

@@ -29,6 +29,10 @@ use Survos\SearchBundle\EventSubscriber\HitEntityHydrator;
 use Survos\SearchBundle\Menu\SearchMenuSubscriber;
 use Survos\SearchBundle\Registry\UxSearchRegistry;
 use Survos\SearchBundle\Search\Url\UrlFormaterInterface;
+use Survos\SearchBundle\Service\DbalParameterTranslator;
+use Survos\SearchBundle\Service\DoctrineParameterTranslator;
+use Survos\SearchBundle\Service\ElasticParameterTranslator;
+use Survos\SearchBundle\Service\ParameterTranslatorInterface;
 use Survos\SearchBundle\Service\FieldSearchConfigurator;
 use Survos\SearchBundle\Twig\SearchExtension;
 use Symfony\Component\AssetMapper\AssetMapperInterface;
@@ -100,6 +104,7 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
             $definition->addTag('kernel.reset', ['method' => 'reset']);
         });
         $builder->registerForAutoconfiguration(AdapterFactoryInterface::class)->addTag('survos_search.adapter_factory');
+        $builder->registerForAutoconfiguration(ParameterTranslatorInterface::class)->addTag('survos_search.parameter_translator');
         $builder->registerForAutoconfiguration(UrlFormaterInterface::class)->addTag('survos_search.url_formater');
 
         $services = $container->services()->defaults()->autowire()->autoconfigure();
@@ -116,6 +121,9 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
             ->set(PostgresBm25Factory::class)
                 ->arg('$managerRegistry', new Reference(ManagerRegistry::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
                 ->tag('survos_search.adapter_factory')
+            ->set(DoctrineParameterTranslator::class)->tag('survos_search.parameter_translator')
+            ->set(DbalParameterTranslator::class)->tag('survos_search.parameter_translator')
+            ->set(ElasticParameterTranslator::class)->tag('survos_search.parameter_translator')
             ->set(HitEntityHydrator::class)
             ->set(SearchExtension::class)
                 ->arg('$fieldReader', new Reference(FieldReader::class))

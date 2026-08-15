@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Search;
 
 use Doctrine\ORM\Mapping\Column;
-use Doctrine\ORM\QueryBuilder;
-use Doctrine\Persistence\ManagerRegistry;
-use Survos\SearchBundle\Adapter\Doctrine\DoctrineAdapter;
+use Survos\SearchBundle\Service\ParameterTranslatorInterface;
 use Survos\SearchBundle\Twig\Components\Facet\RefinementList;
 use Symfony\Component\String\UnicodeString;
 
+/**
+ * A search derived entirely from Doctrine metadata plus three optional class constants, for
+ * entities that carry #[EntityMeta]. It adds no engine knowledge of its own: which parameters
+ * an adapter needs is AbstractFieldSearch's job, via the ParameterTranslator services.
+ */
 final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateSearchInterface
 {
     /**
@@ -20,8 +23,6 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
     public function __construct(
         private readonly string $entityClass,
         private readonly array $fieldNames,
-        private readonly ?ManagerRegistry $managerRegistry = null,
-        private readonly ?string $defaultAdapterDsn = null,
     ) {}
 
     public function getIndexName(): ?string
@@ -34,6 +35,11 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
         return $this->entityClass;
     }
 
+    protected function allowedFieldNames(): array
+    {
+        return $this->fieldNames;
+    }
+
     private ?string $hitTemplate = null;
 
     public function getHitTemplate(): ?string
@@ -44,271 +50,15 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
     public function build(array $options = []): void
     {
         $this->hitTemplate = $options['hitTemplate'] ?? null;
-
-        $isDbalAdapter = $this->isDbalAdapter();
-        $isElasticsearchAdapter = $this->isElasticsearchAdapter();
-        $this->getFieldSearchConfigurator()->configure(
-            $this,
-            $this->entityClass,
-            $this->fieldNames,
-            ($isDbalAdapter || $isElasticsearchAdapter) ? null : 'o.',
-        );
-
-        $this->applyConstantFields($isDbalAdapter || $isElasticsearchAdapter);
-
-        if ($isDbalAdapter) {
-            $this->configureDbalAdapter();
-            return;
-        }
-        if ($isElasticsearchAdapter) {
-            $this->configureElasticsearchAdapter();
-            return;
-        }
-
-        $searchFields = $this->getAdapterParameters()[DoctrineAdapter::SEARCH_FIELDS] ?? [];
-        $this->setAdapterParameters([
-            DoctrineAdapter::SEARCH_FIELDS => $searchFields,
-            DoctrineAdapter::QUERY_BUILDER_ALIAS => 'o',
-            DoctrineAdapter::QUERY_BUILDER => static function (QueryBuilder $qb): void {},
-            DoctrineAdapter::MAX_FACET_VALUES_PARAM => $this->getAdapterParameters()[DoctrineAdapter::MAX_FACET_VALUES_PARAM] ?? 20,
-            DoctrineAdapter::COUNT_DISTINCT => false,
-            DoctrineAdapter::FETCH_JOIN_COLLECTION => false,
-        ]);
+        parent::build($options);
     }
 
-    private function isDbalAdapter(): bool
+    protected function configureFields(?ParameterTranslatorInterface $translator): void
     {
-        return is_string($this->defaultAdapterDsn)
-            && (str_starts_with($this->defaultAdapterDsn, 'sqlite-fts5://') || str_starts_with($this->defaultAdapterDsn, 'postgres-bm25://'));
+        $this->applyConstantFields($translator?->columnPrefix());
     }
 
-    private function isElasticsearchAdapter(): bool
-    {
-        return is_string($this->defaultAdapterDsn)
-            && (str_starts_with($this->defaultAdapterDsn, 'elasticsearch://')
-                || str_starts_with($this->defaultAdapterDsn, 'elasticsearch+https://')
-                || str_starts_with($this->defaultAdapterDsn, 'elastic://'));
-    }
-
-    private function configureElasticsearchAdapter(): void
-    {
-        if (!$this->managerRegistry) {
-            return;
-        }
-        $manager = $this->managerRegistry->getManagerForClass($this->entityClass);
-        if (!$manager) {
-            return;
-        }
-
-        $metadata = $manager->getClassMetadata($this->entityClass);
-        $parameters = $this->getAdapterParameters();
-        $parameters['searchFields'] = $this->plainFields($parameters['searchFields'] ?? []);
-        $facetColumns = $parameters['facetColumns'] ?? [];
-        $sortColumns = $parameters['sortColumns'] ?? [];
-        $parameters['facetFields'] = [];
-        $parameters['sortFields'] = [];
-        $parameters['mappings'] = [];
-
-        $includedFields = [];
-        foreach ($metadata->getFieldNames() as $field) {
-            $type = $metadata->getTypeOfField($field);
-            $isText = in_array($type, ['string', 'text', 'ascii_string'], true);
-
-            // A json column is either an array of scalars -- often the most useful facet
-            // there is (phpVersions, keywords) -- or a nested object blob. Doctrine reports
-            // both as 'json', and mapping a blob as `keyword` makes Elasticsearch reject the
-            // whole bulk request ("Expected text but found START_OBJECT"). We can't tell them
-            // apart from metadata, so json is opt-in: included only when it was explicitly
-            // named as a facet or a search field.
-            if (in_array($type, ['json', 'jsonb', 'array', 'simple_array'], true)
-                && !array_key_exists($field, $facetColumns)
-                && !in_array($field, $parameters['searchFields'], true)
-            ) {
-                continue;
-            }
-
-            $includedFields[] = $field;
-            $parameters['mappings'][$field] = $isText
-                ? ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword', 'ignore_above' => 512]]]
-                : ['type' => match ($type) {
-                    'integer', 'smallint', 'bigint' => 'long',
-                    'float', 'decimal' => 'double',
-                    'boolean' => 'boolean',
-                    'date', 'date_immutable', 'datetime', 'datetime_immutable', 'datetimetz', 'datetimetz_immutable' => 'date',
-                    default => 'keyword',
-                }];
-
-            if (array_key_exists($field, $facetColumns)) {
-                $parameters['facetFields'][$field] = $isText ? $field . '.keyword' : $field;
-            }
-            if (array_key_exists($field, $sortColumns)) {
-                $parameters['sortFields'][$field] = $isText ? $field . '.keyword' : $field;
-            }
-        }
-
-        $parameters['index'] ??= strtolower($metadata->getTableName());
-        $parameters['idField'] ??= $metadata->getSingleIdentifierFieldName();
-        $parameters['sourceFields'] ??= $includedFields;
-        unset($parameters['facetColumns'], $parameters['sortColumns']);
-        $this->setAdapterParameters($parameters);
-    }
-
-    /** @param array<int|string, mixed> $fields
-     *  @return string[]
-     */
-    private function plainFields(array $fields): array
-    {
-        $plain = [];
-        foreach ($fields as $field) {
-            if (is_string($field)) {
-                $plain[] = preg_replace('/^[a-z]+\./', '', $field) ?? $field;
-            }
-        }
-        return array_values(array_unique($plain));
-    }
-
-    private function configureDbalAdapter(): void
-    {
-        if (!$this->managerRegistry) {
-            return;
-        }
-
-        $manager = $this->managerRegistry->getManagerForClass($this->entityClass);
-        if (!$manager) {
-            return;
-        }
-
-        $metadata = $manager->getClassMetadata($this->entityClass);
-        $table = $metadata->getTableName();
-        $columnForField = [];
-        foreach ($metadata->getFieldNames() as $field) {
-            $columnForField[$field] = $metadata->getColumnName($field);
-        }
-
-        $adapterParameters = $this->getAdapterParameters();
-        $adapterParameters['facetColumns'] ??= [];
-        $adapterParameters['sortColumns'] ??= [];
-        foreach ($this->getFacets() as $facet) {
-            $property = $facet->getProperty();
-            if (!isset($columnForField[$property]) && !isset($adapterParameters['facetColumns'][$property])) {
-                throw new \LogicException(sprintf(
-                    'Cannot configure DBAL search facet "%s" for %s: no Doctrine field mapping exists.',
-                    $property,
-                    $this->entityClass,
-                ));
-            }
-            // Multi-valued facets are allowed through unfacetableFields() because engines that
-            // bucket each array element handle them natively. A DBAL adapter does not: it would
-            // GROUP BY the whole serialized array and render ["8.2","8.3"] as a single bucket.
-            // Fail loudly rather than produce facets that look plausible and are wrong.
-            $fieldType = isset($columnForField[$property]) ? $metadata->getTypeOfField($property) : null;
-            if (in_array($fieldType, ['json', 'jsonb', 'array', 'simple_array'], true)) {
-                throw new \LogicException(sprintf(
-                    'Cannot facet "%s" on %s with a DBAL adapter: it is a "%s" column, and GROUP BY would '
-                    . 'bucket the whole serialized array rather than each element. Use the Elasticsearch '
-                    . 'adapter for multi-valued facets, or remove it from FILTERABLE_FIELDS.',
-                    $property,
-                    $this->entityClass,
-                    $fieldType,
-                ));
-            }
-            $adapterParameters['facetColumns'][$property] ??= $property;
-        }
-        $adapterParameters['searchFields'] = $this->mapFieldList($adapterParameters['searchFields'] ?? [], $columnForField);
-        $adapterParameters['facetColumns'] = $this->mapFieldColumns($adapterParameters['facetColumns'], $columnForField);
-        $adapterParameters['sortColumns'] = $this->mapFieldColumns($adapterParameters['sortColumns'], $columnForField);
-
-        $adapterParameters += [
-            'table' => $table,
-            'idColumn' => $metadata->getColumnName($metadata->getSingleIdentifierFieldName()),
-            'selectColumns' => array_values($columnForField),
-        ];
-
-        if (str_starts_with((string) $this->defaultAdapterDsn, 'sqlite-fts5://')) {
-            $adapterParameters += [
-                'ftsTable' => $table . '_fts',
-            ];
-        }
-
-        if (str_starts_with((string) $this->defaultAdapterDsn, 'postgres-bm25://')) {
-            $vectorExpression = $this->postgresVectorExpression($adapterParameters['searchFields'] ?? [], $manager->getConnection(), true);
-            $adapterParameters += [
-                'matchExpression' => sprintf("(%s) @@ websearch_to_tsquery('english', :bm25Query)", $vectorExpression),
-                'scoreExpression' => sprintf("ts_rank((%s), websearch_to_tsquery('english', :bm25Query))", $vectorExpression),
-            ];
-        }
-
-        $this->setAdapterParameters($adapterParameters);
-    }
-
-    /**
-     * @param array<int|string, mixed> $fields
-     * @param array<string, string> $columnForField
-     * @return string[]
-     */
-    private function mapFieldList(array $fields, array $columnForField): array
-    {
-        $mapped = [];
-        foreach ($fields as $field) {
-            if (!is_string($field)) {
-                continue;
-            }
-            $mapped[] = $this->dbalColumnExpression($field, $columnForField);
-        }
-
-        return array_values(array_unique($mapped));
-    }
-
-    /**
-     * @param array<string, mixed> $columns
-     * @param array<string, string> $columnForField
-     * @return array<string, string>
-     */
-    private function mapFieldColumns(array $columns, array $columnForField): array
-    {
-        $mapped = [];
-        foreach ($columns as $property => $column) {
-            if (!is_string($property)) {
-                continue;
-            }
-            $mapped[$property] = is_string($column)
-                ? $this->dbalColumnExpression($column, $columnForField)
-                : 'd.' . ($columnForField[$property] ?? $property);
-        }
-
-        return $mapped;
-    }
-
-    /** @param array<string, string> $columnForField */
-    private function dbalColumnExpression(string $expression, array $columnForField): string
-    {
-        $field = str_starts_with($expression, 'd.') ? substr($expression, 2) : $expression;
-        $field = str_starts_with($field, 'o.') ? substr($field, 2) : $field;
-
-        if (isset($columnForField[$field])) {
-            return 'd.' . $columnForField[$field];
-        }
-
-        return $expression;
-    }
-
-    /** @param string[] $fields */
-    private function postgresVectorExpression(array $fields, \Doctrine\DBAL\Connection $connection, bool $withAlias): string
-    {
-        $expressions = [];
-        foreach ($fields as $field) {
-            if (!is_string($field) || $field === '') {
-                continue;
-            }
-            $column = preg_replace('/^[a-z]+\./', '', $field) ?? $field;
-            $qualified = ($withAlias ? 'd.' : '') . $connection->quoteIdentifier($column);
-            $expressions[] = sprintf("to_tsvector('english', coalesce(%s::text, ''))", $qualified);
-        }
-
-        return $expressions === [] ? "to_tsvector('english', '')" : implode(' || ', $expressions);
-    }
-
-    private function applyConstantFields(bool $isDbalAdapter): void
+    private function applyConstantFields(?string $columnPrefix): void
     {
         $rc = new \ReflectionClass($this->entityClass);
 
@@ -329,11 +79,15 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
             $label = ucwords(str_replace('_', ' ', (new UnicodeString($field))->snake()->toString()));
             $this->addFacet($field, $label, RefinementList::class);
             $existingFacets[$field] = true;
-            if ($isDbalAdapter) {
-                $adapterParameters = $this->getAdapterParameters();
-                $adapterParameters['facetColumns'][$field] ??= 'd.' . $field;
-                $this->setAdapterParameters($adapterParameters);
-            }
+
+            // Record it engine-neutrally too. The translators read facetColumns, not
+            // getFacets(): Elasticsearch turns the key into a facetField (and uses it to decide
+            // whether a json column is worth mapping at all), and the DBAL translator maps it to
+            // a "d."-prefixed column. Without this, FILTERABLE_FIELDS produced facets the engine
+            // never saw -- which silently dropped the array facets that motivate this whole path.
+            $adapterParameters = $this->getAdapterParameters();
+            $adapterParameters['facetColumns'][$field] ??= $field;
+            $this->setAdapterParameters($adapterParameters);
         }
 
         $existingSorts = [];
@@ -344,29 +98,30 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
 
         foreach ($sortable as $field) {
             $label = ucwords(str_replace('_', ' ', (new UnicodeString($field))->snake()->toString()));
-            $sortKey = $isDbalAdapter ? $field : "o.{$field}";
+            $sortKey = $columnPrefix === null ? $field : $columnPrefix . $field;
             if (!isset($existingSorts["{$sortKey}:asc"])) {
                 $this->addAvailableSort("{$sortKey}:asc", "{$label} A-Z");
             }
             if (!isset($existingSorts["{$sortKey}:desc"])) {
                 $this->addAvailableSort("{$sortKey}:desc", "{$label} Z-A");
             }
-            if ($isDbalAdapter) {
-                $adapterParameters = $this->getAdapterParameters();
-                $adapterParameters['sortColumns'][$field] ??= 'd.' . $field;
-                $this->setAdapterParameters($adapterParameters);
-            }
+
+            $adapterParameters = $this->getAdapterParameters();
+            $adapterParameters['sortColumns'][$field] ??= $field;
+            $this->setAdapterParameters($adapterParameters);
         }
 
         if ($searchable !== []) {
+            // Always write the neutral 'searchFields'. Mapping it to whatever key the engine
+            // wants -- DoctrineAdapter::SEARCH_FIELDS, or column expressions for DBAL -- is the
+            // translator's job now.
             $adapterParameters = $this->getAdapterParameters();
-            $prefix = $isDbalAdapter ? '' : 'o.';
-            $existing = $adapterParameters[DoctrineAdapter::SEARCH_FIELDS] ?? $adapterParameters['searchFields'] ?? [];
-            $adapterParameters['searchFields'] = array_unique(array_merge($existing, array_map(static fn (string $f) => $prefix . $f, $searchable)));
-            if (!$isDbalAdapter) {
-                $adapterParameters[DoctrineAdapter::SEARCH_FIELDS] = $adapterParameters['searchFields'];
-                unset($adapterParameters['searchFields']);
-            }
+            $prefix = $columnPrefix ?? '';
+            $existing = $adapterParameters['searchFields'] ?? [];
+            $adapterParameters['searchFields'] = array_values(array_unique(array_merge(
+                $existing,
+                array_map(static fn (string $f): string => $prefix . $f, $searchable),
+            )));
             $this->setAdapterParameters($adapterParameters);
         }
     }

@@ -74,7 +74,9 @@ final class AutoEntitySearchPass implements CompilerPassInterface
             return;
         }
 
-        $defaultAdapterDsn = $this->defaultAdapterDsn($container);
+        $entityAdapters = $container->hasParameter('survos_search.entity_adapters')
+            ? (array) $container->getParameter('survos_search.entity_adapters')
+            : [];
         $uxDescriptors = [];
         $newSearches = [];
 
@@ -103,12 +105,15 @@ final class AutoEntitySearchPass implements CompilerPassInterface
                     ->setPublic(false)
                     ->setArgument('$entityClass', $class)
                     ->setArgument('$fieldNames', $fieldNames)
-                    ->setArgument('$managerRegistry', new Reference(ManagerRegistry::class))
-                    ->setArgument('$defaultAdapterDsn', $defaultAdapterDsn)
+                    // adapter: null means "the app default", resolved at runtime by
+                    // AdapterProvider. It used to be baked in here as a DSN string read at
+                    // compile time, which forced survos_search.default_adapter to be a literal
+                    // -- an %env() placeholder silently produced a null DSN and every search
+                    // fell back to Doctrine with no error.
                     ->addTag('survos_search.search', [
                         'index' => $class,
                         'name' => $code,
-                        'adapter' => null,
+                        'adapter' => $entityAdapters[$code] ?? null,
                     ])
                     ->addTag('kernel.reset', ['method' => 'reset'])
             );
@@ -118,10 +123,45 @@ final class AutoEntitySearchPass implements CompilerPassInterface
                 '$class' => $class,
                 '$code' => $code,
                 '$name' => $code,
-                '$adapter' => 'default',
+                '$adapter' => $entityAdapters[$code] ?? 'default',
                 '$hitTemplate' => $this->hitTemplate($container, $class, $code),
                 '$url' => null,
             ]);
+        }
+
+        // Hand-written #[AsSearch] classes are registered in SearchProvider by
+        // RegisterSearchPass, but until now they never reached UxSearchRegistry -- so
+        // survos:search:index, AutoSearchController and the admin menu could not see them,
+        // and neither could survos/elastic-bundle's index and postFlush reconcile. Anything
+        // whose index is a real class gets a descriptor too.
+        $seen = [];
+        foreach ($uxDescriptors as $descriptor) {
+            $seen[$descriptor->getArgument('$code')] = true;
+        }
+
+        foreach ($container->findTaggedServiceIds('survos_search.search') as $serviceId => $tags) {
+            foreach ($tags as $tag) {
+                $name = $tag['name'] ?? null;
+                $index = $tag['index'] ?? null;
+                if (!is_string($name) || isset($seen[$name])) {
+                    continue;
+                }
+                // index may be a free-form string (folio_row) rather than an entity class;
+                // without a class there is nothing to load documents from, so skip it.
+                if (!is_string($index) || !class_exists($index)) {
+                    continue;
+                }
+
+                $seen[$name] = true;
+                $uxDescriptors[] = new Definition(UxSearchDescriptor::class, [
+                    '$class' => $index,
+                    '$code' => $name,
+                    '$name' => $name,
+                    '$adapter' => $tag['adapter'] ?? 'default',
+                    '$hitTemplate' => $this->hitTemplate($container, $index, $name),
+                    '$url' => null,
+                ]);
+            }
         }
 
         $container->getDefinition(UxSearchRegistry::class)
@@ -150,28 +190,6 @@ final class AutoEntitySearchPass implements CompilerPassInterface
         }
 
         return sprintf('search/hits/%s.html.twig', $code);
-    }
-
-    private function defaultAdapterDsn(ContainerBuilder $container): ?string
-    {
-        if (!$container->hasParameter('survos_search.default_adapter') || !$container->hasParameter('survos_search.adapters')) {
-            return null;
-        }
-
-        $defaultAdapter = (string) $container->getParameter('survos_search.default_adapter');
-        $adapters = $container->getParameter('survos_search.adapters');
-        if (!is_array($adapters)) {
-            return null;
-        }
-
-        $adapterConfig = $adapters[$defaultAdapter] ?? null;
-        if (is_string($adapterConfig)) {
-            return $adapterConfig;
-        }
-
-        return is_array($adapterConfig) && is_string($adapterConfig['dsn'] ?? null)
-            ? $adapterConfig['dsn']
-            : null;
     }
 
     /**
