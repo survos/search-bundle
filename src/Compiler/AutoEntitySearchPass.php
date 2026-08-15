@@ -41,6 +41,19 @@ final class AutoEntitySearchPass implements CompilerPassInterface
         Types::TIME_MUTABLE,
     ];
 
+    /**
+     * Multi-valued columns. Not scalars, but a search engine that buckets each element of
+     * an array (Elasticsearch, Meilisearch) can facet them meaningfully -- and they're
+     * often the *most* interesting facets (phpVersions, symfonyVersions, keywords).
+     * Admitting them here only makes them visible to FieldSearchConfigurator; whether a
+     * given field is searchable, sortable, or a facet is still decided by its #[Field]
+     * descriptor.
+     */
+    private const array MULTI_VALUE_TYPES = [
+        Types::JSON,
+        Types::SIMPLE_ARRAY,
+    ];
+
     public function process(ContainerBuilder $container): void
     {
         if (!$container->hasDefinition(EntityMetaRegistry::class)) {
@@ -180,7 +193,7 @@ final class AutoEntitySearchPass implements CompilerPassInterface
                 $type = $this->phpType($property) ?? Types::STRING;
             }
 
-            if (in_array($type, self::SCALAR_TYPES, true)) {
+            if (in_array($type, self::SCALAR_TYPES, true) || in_array($type, self::MULTI_VALUE_TYPES, true)) {
                 $fields[] = $property->getName();
             }
         }
@@ -199,6 +212,10 @@ final class AutoEntitySearchPass implements CompilerPassInterface
             'int' => Types::INTEGER,
             'float' => Types::FLOAT,
             'bool' => Types::BOOLEAN,
+            // An untyped #[ORM\Column] on an ?array property is a json column; calling it
+            // a string admitted it to the field list for the wrong reason and mislabelled
+            // it for anything that reads this type back.
+            'array' => Types::JSON,
             default => Types::STRING,
         };
     }

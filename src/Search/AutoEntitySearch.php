@@ -181,6 +181,21 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
                     $this->entityClass,
                 ));
             }
+            // Multi-valued facets are allowed through unfacetableFields() because engines that
+            // bucket each array element handle them natively. A DBAL adapter does not: it would
+            // GROUP BY the whole serialized array and render ["8.2","8.3"] as a single bucket.
+            // Fail loudly rather than produce facets that look plausible and are wrong.
+            $fieldType = isset($columnForField[$property]) ? $metadata->getTypeOfField($property) : null;
+            if (in_array($fieldType, ['json', 'jsonb', 'array', 'simple_array'], true)) {
+                throw new \LogicException(sprintf(
+                    'Cannot facet "%s" on %s with a DBAL adapter: it is a "%s" column, and GROUP BY would '
+                    . 'bucket the whole serialized array rather than each element. Use the Elasticsearch '
+                    . 'adapter for multi-valued facets, or remove it from FILTERABLE_FIELDS.',
+                    $property,
+                    $this->entityClass,
+                    $fieldType,
+                ));
+            }
             $adapterParameters['facetColumns'][$property] ??= $property;
         }
         $adapterParameters['searchFields'] = $this->mapFieldList($adapterParameters['searchFields'] ?? [], $columnForField);
@@ -285,7 +300,7 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
         $filterable = $rc->hasConstant('FILTERABLE_FIELDS') ? (array) $rc->getConstant('FILTERABLE_FIELDS') : [];
         $sortable = $rc->hasConstant('SORTABLE_FIELDS') ? (array) $rc->getConstant('SORTABLE_FIELDS') : [];
 
-        $skipFacets = $this->nonStatFields($rc);
+        $skipFacets = $this->unfacetableFields($rc);
         $existingFacets = [];
         foreach ($this->getFacets() as $facet) {
             $existingFacets[$facet->getProperty()] = true;
@@ -340,23 +355,37 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
         }
     }
 
-    /** @return array<string, true> */
-    private function nonStatFields(\ReflectionClass $rc): array
+    /**
+     * Fields that cannot back a facet at all, whatever the adapter.
+     *
+     * This used to also exclude json/jsonb/array/simple_array, which meant a column named
+     * in FILTERABLE_FIELDS -- an explicit request -- was silently dropped. Multi-valued
+     * columns are frequently the most useful facets (phpVersions, symfonyVersions,
+     * keywords), and an engine that buckets each element handles them natively, so an
+     * explicit declaration now wins. See configureDbalAdapter(), which rejects them loudly
+     * for adapters that would GROUP BY the whole serialized array instead.
+     *
+     * boolean stays excluded: PostgreSQL rejects min(boolean) in DoctrineAdapter's stats
+     * query (same reason FieldSearchConfigurator::shouldExposeFacet() skips Widget::Boolean).
+     *
+     * @return array<string, true>
+     */
+    private function unfacetableFields(\ReflectionClass $rc): array
     {
-        static $nonStatTypes = ['boolean', 'bool', 'json', 'jsonb', 'array', 'simple_array', 'object'];
+        $unfacetableTypes = ['boolean', 'bool', 'object'];
 
         $skip = [];
         foreach ($rc->getProperties() as $prop) {
             foreach ($prop->getAttributes(Column::class) as $attr) {
                 $col = $attr->newInstance();
                 $type = $col->type ?? null;
-                if ($type !== null && in_array($type, $nonStatTypes, true)) {
+                if ($type !== null && in_array($type, $unfacetableTypes, true)) {
                     $skip[$prop->getName()] = true;
                     continue 2;
                 }
             }
             $nativeType = $prop->getType();
-            if ($nativeType instanceof \ReflectionNamedType && in_array($nativeType->getName(), ['bool', 'array'], true)) {
+            if ($nativeType instanceof \ReflectionNamedType && $nativeType->getName() === 'bool') {
                 $skip[$prop->getName()] = true;
             }
         }

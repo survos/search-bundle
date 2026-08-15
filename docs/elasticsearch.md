@@ -48,6 +48,24 @@ facets and sorts comes from the entity's `SEARCHABLE_FIELDS`, `FILTERABLE_FIELDS
 `FILTERABLE_FIELDS` to low-cardinality columns — a terms aggregation over a free-text
 column is slow and useless, and the adapter caps results at `maxFacetValues: 100`.
 
+### Multi-valued (array) facets
+
+`json` and `simple_array` columns work as facets on this adapter, with no Search class of
+your own. They map to `keyword`, and Elasticsearch buckets **each element** — so a
+`phpVersions` column holding `["8.2","8.3"]` produces separate `8.2` and `8.3` buckets, and
+a term filter matches a document if any element matches. Indexing already passes arrays
+through intact (`SearchIndexCommand::normalizeValue()` recurses into them).
+
+This is often where the interesting facets live. Just name the column in
+`FILTERABLE_FIELDS`; an explicit declaration is honoured even though undeclared blob
+columns are still left out of auto-discovery.
+
+Multi-valued facets are **Elasticsearch-only** among the current adapters. A DBAL adapter
+(SQLite FTS5, Postgres BM25) would `GROUP BY` the whole serialized array and render
+`["8.2","8.3"]` as one bucket, so `AutoEntitySearch::configureDbalAdapter()` throws instead
+of producing facets that look plausible and are wrong. The plain Doctrine ORM adapter has
+the same limitation but no guard yet. Meilisearch handles arrays natively.
+
 ## Indexing
 
 ```bash
