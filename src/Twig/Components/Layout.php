@@ -73,6 +73,17 @@ class Layout
     #[LiveProp]
     public array $fixedFilters = [];
 
+    /**
+     * Reflect the query, sort, page and facets in the URL, and read them back from it.
+     *
+     * Off by default because an embedded search widget shares its URL with the page around it.
+     * A dedicated search page should turn it on: without it Layout skips applyFilters() entirely,
+     * so ?query= is ignored, results cannot be linked to or reloaded, and the page cannot be
+     * driven or tested from a URL at all.
+     */
+    #[LiveProp]
+    public bool $urlRewriting = false;
+
     public ?SearchInterface $search = null;
 
     #[LiveProp(useSerializerForHydration: true)]
@@ -98,7 +109,11 @@ class Layout
         $this->options = $data['options'] ?? [];
         $this->initialQuery = $data['initialQuery'] ?? [];
         $this->fixedFilters = $data['fixedFilters'] ?? [];
+        // PreMount runs before props are hydrated onto $this, which is why every value here comes
+        // from $data. Assigning it also carries the flag into the LiveProp for re-renders.
+        $this->urlRewriting = (bool) ($data['urlRewriting'] ?? false);
         $this->search = $this->getSearch($data['name'])->create($this->options);
+        $this->applyUrlRewriting();
         $this->query = $this->getSearch($data['name'])->createQuery();
         $this->applyInitialQuery($this->query, $this->initialQuery);
 
@@ -118,6 +133,7 @@ class Layout
     public function onReRender(): void
     {
         $this->search = $this->getSearch($this->name)->create($this->options);
+        $this->applyUrlRewriting();
         $this->performSearch();
 
         $this->dispatchBrowserEvent('ux-search:query:update', $this->serializer->normalize($this->query));
@@ -290,6 +306,14 @@ class Layout
     private function getSearch(string $name): SearchInterface
     {
         return $this->searchConfigurationProvider->getSearch($name);
+    }
+
+    /** create() rebuilds the search from scratch, so the flag cannot be set once and kept. */
+    private function applyUrlRewriting(): void
+    {
+        if ($this->urlRewriting && null !== $this->search) {
+            $this->search->enableUrlRewriting();
+        }
     }
 
     private function getUrlFormater(): UrlFormaterInterface
