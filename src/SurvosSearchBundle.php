@@ -31,6 +31,7 @@ use Survos\SearchBundle\Registry\UxSearchRegistry;
 use Survos\SearchBundle\Search\Url\UrlFormaterInterface;
 use Survos\SearchBundle\Service\DbalParameterTranslator;
 use Survos\SearchBundle\Service\DoctrineParameterTranslator;
+use Survos\SearchBundle\Service\ElasticIndexNameResolver;
 use Survos\SearchBundle\Service\ElasticParameterTranslator;
 use Survos\SearchBundle\Service\ParameterTranslatorInterface;
 use Survos\SearchBundle\Service\FieldSearchConfigurator;
@@ -63,6 +64,14 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
         $this->addRouteOptions($children, '');
         $children
             ->scalarNode('default_adapter')->defaultValue('default')->end()
+            ->scalarNode('index_prefix')
+                ->defaultValue('%env(default::MEILI_PREFIX)%')
+                ->info('Prefix applied to every Elasticsearch index name, once, by '
+                    . 'ElasticIndexNameResolver. Reuses MEILI_PREFIX so one app has one index '
+                    . 'namespace across both engines. Leaving it unset is an error the first time '
+                    . 'a name is resolved: bare index names share a flat cluster namespace with '
+                    . 'every other app on the node. Set it to an empty string to share deliberately.')
+            ->end()
             ->arrayNode('adapters')
                 ->normalizeKeys(false)
                 ->useAttributeAsKey('name')
@@ -93,6 +102,7 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
         $this->registerRouteLoader($builder);
 
         $builder->setParameter('survos_search.default_adapter', $config['default_adapter']);
+        $builder->setParameter('survos_search.index_prefix', $config['index_prefix']);
         $builder->setParameter('survos_search.adapters', $config['adapters']);
 
         $builder->registerAttributeForAutoconfiguration(AsSearch::class, static function (ChildDefinition $definition, AsSearch $attribute, \Reflector $reflector): void {
@@ -123,6 +133,8 @@ final class SurvosSearchBundle extends AbstractSurvosBundle
                 ->tag('survos_search.adapter_factory')
             ->set(DoctrineParameterTranslator::class)->tag('survos_search.parameter_translator')
             ->set(DbalParameterTranslator::class)->tag('survos_search.parameter_translator')
+            ->set(ElasticIndexNameResolver::class)
+                ->arg('$prefix', '%survos_search.index_prefix%')
             ->set(ElasticParameterTranslator::class)->tag('survos_search.parameter_translator')
             ->set(HitEntityHydrator::class)
             ->set(SearchExtension::class)

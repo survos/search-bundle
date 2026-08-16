@@ -8,6 +8,7 @@ use Elastic\Elasticsearch\ClientBuilder;
 use Psr\Log\LoggerInterface;
 use Survos\SearchBundle\Adapter\AdapterFactoryInterface;
 use Survos\SearchBundle\Adapter\AdapterInterface;
+use Survos\SearchBundle\Service\ElasticIndexNameResolver;
 
 final readonly class ElasticsearchFactory implements AdapterFactoryInterface
 {
@@ -20,6 +21,9 @@ final readonly class ElasticsearchFactory implements AdapterFactoryInterface
         private ElasticsearchQueryBuilder $queryBuilder,
         private ?LoggerInterface $logger = null,
         private ?ElasticsearchClientDecoratorInterface $clientDecorator = null,
+        // DI always supplies the configured resolver; this default only serves direct
+        // instantiation in tests, where sharing the namespace is deliberate.
+        private ElasticIndexNameResolver $nameResolver = new ElasticIndexNameResolver(''),
     ) {}
 
     public function support(string $dsn): bool
@@ -59,6 +63,7 @@ final readonly class ElasticsearchFactory implements AdapterFactoryInterface
         return new ElasticsearchAdapter(
             $this->clientDecorator?->decorate($client) ?? $client,
             $this->queryBuilder,
+            $this->nameResolver,
         );
     }
 }

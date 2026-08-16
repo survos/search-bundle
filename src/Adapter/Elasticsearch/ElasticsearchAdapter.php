@@ -14,6 +14,7 @@ use Survos\SearchBundle\Search\ResultSet\Hit;
 use Survos\SearchBundle\Search\ResultSet\ResultSet;
 use Survos\SearchBundle\Search\SearchInterface;
 use Survos\SearchBundle\Contract\EmbeddingProviderInterface;
+use Survos\SearchBundle\Service\ElasticIndexNameResolver;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 final readonly class ElasticsearchAdapter implements AdapterInterface
@@ -21,6 +22,9 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
     public function __construct(
         private ElasticsearchClientInterface $client,
         private ElasticsearchQueryBuilder $queryBuilder,
+        // DI always supplies the configured resolver; this default only serves direct
+        // instantiation in tests, where sharing the namespace is deliberate.
+        private ElasticIndexNameResolver $nameResolver = new ElasticIndexNameResolver(''),
     ) {}
 
     public function configureParameters(OptionsResolver $resolver): void
@@ -185,13 +189,14 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
         return [$distributions, $stats];
     }
 
+    /**
+     * Never derive an index name here. ElasticIndexNameResolver is the single source of truth,
+     * shared with the write path in elastic-bundle — this method used to have its own fallback and
+     * its own sanitiser, and they disagreed with the write path's. See survos/mono#44.
+     */
     private function indexName(SearchInterface $search): string
     {
-        $configured = $search->getResolvedAdapterParameter('index');
-        $name = is_string($configured) && $configured !== '' ? $configured : (string) $search->getIndexName();
-        $name = strtolower((string) preg_replace('/[^a-zA-Z0-9_-]+/', '-', $name));
-
-        return trim($name, '-') ?: 'search';
+        return $this->nameResolver->uid($search);
     }
 
     /** @return array<string, mixed> */
