@@ -11,8 +11,15 @@ interface ElasticsearchClientInterface
      */
     public function search(string $index, array $body): array;
 
-    /** @param array<string, mixed> $mappings */
-    public function createIndex(string $index, array $mappings): void;
+    /**
+     * @param array<string, mixed> $mappings the whole `mappings` block — `properties`, `dynamic`, …
+     *                                       rather than just the properties, so callers can set
+     *                                       `dynamic: strict` and (later) analyzers without another
+     *                                       signature change
+     * @param array<string, mixed> $settings index settings; analysis config is static and can only
+     *                                       be set at creation
+     */
+    public function createIndex(string $index, array $mappings, array $settings = []): void;
 
     public function deleteIndex(string $index): void;
 

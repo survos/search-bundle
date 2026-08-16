@@ -16,12 +16,14 @@ final readonly class ElasticsearchClient implements ElasticsearchClientInterface
         return $this->response($this->client->search(['index' => $index, 'body' => $body]))->asArray();
     }
 
-    public function createIndex(string $index, array $mappings): void
+    public function createIndex(string $index, array $mappings, array $settings = []): void
     {
-        $this->client->indices()->create([
-            'index' => $index,
-            'body' => ['mappings' => ['properties' => $mappings]],
-        ]);
+        $body = ['mappings' => $mappings];
+        if ([] !== $settings) {
+            $body['settings'] = $settings;
+        }
+
+        $this->client->indices()->create(['index' => $index, 'body' => $body]);
     }
 
     public function deleteIndex(string $index): void
