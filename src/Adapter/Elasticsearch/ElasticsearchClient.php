@@ -137,6 +137,23 @@ final readonly class ElasticsearchClient implements ElasticsearchClientInterface
         return $aliases;
     }
 
+    public function updateAliases(array $actions): void
+    {
+        $this->client->indices()->updateAliases(['body' => ['actions' => $actions]]);
+    }
+
+    public function indicesForAlias(string $alias): array
+    {
+        // getAlias() on a missing alias is a 404; introspect() turns that into "nothing", which is
+        // the right answer for a caller asking what an alias currently points at.
+        $body = $this->introspect(fn (): array => $this->response($this->client->indices()->getAlias(['name' => $alias]))->asArray());
+
+        $indices = array_keys($body);
+        sort($indices);
+
+        return array_map(strval(...), $indices);
+    }
+
     public function listIndices(string $pattern = '*'): array
     {
         $rows = $this->introspect(fn (): array => $this->response($this->client->cat()->indices([

@@ -124,6 +124,25 @@ final readonly class ElasticIndexNameResolver
     }
 
     /**
+     * The concrete index an alias points at, e.g. `bench_movie_20260815213000`.
+     *
+     * Everything queries and indexes through the alias; the concrete name exists only so a rebuild
+     * has somewhere to write while the old index keeps serving. The timestamp makes the generations
+     * sortable and self-documenting, and keeps the app's own pattern matching them (`bench_*`
+     * covers both the alias and its generations).
+     */
+    public function concreteFor(string $alias, ?string $generation = null): string
+    {
+        return \sprintf('%s_%s', $alias, $generation ?? date('YmdHis'));
+    }
+
+    /** True when $index looks like a generation of $alias rather than an unrelated index. */
+    public function isGenerationOf(string $index, string $alias): bool
+    {
+        return str_starts_with($index, $alias.'_');
+    }
+
+    /**
      * The prefix, guaranteed to end in a separator.
      *
      * MEILI_PREFIX is reused verbatim, and apps write it either way — `kpa` or `kpa_`. Trimming

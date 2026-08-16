@@ -100,4 +100,22 @@ interface ElasticsearchClientInterface
 
     /** @return array<string, list<string>> index name => aliases pointing at it */
     public function listAliases(string $pattern = '*'): array;
+
+    /**
+     * Apply alias actions in one request.
+     *
+     * Elasticsearch applies every action in a single `_aliases` call atomically, which is the only
+     * way to move an alias without a window where it points at nothing. Removing the old and adding
+     * the new as two calls is exactly the downtime this exists to avoid.
+     *
+     * @param list<array<string, mixed>> $actions e.g. [['remove' => [...]], ['add' => [...]]]
+     */
+    public function updateAliases(array $actions): void;
+
+    /**
+     * Concrete indices behind an alias, newest name last. Empty when the alias does not exist.
+     *
+     * @return list<string>
+     */
+    public function indicesForAlias(string $alias): array;
 }
