@@ -63,4 +63,34 @@ interface ElasticsearchClientInterface
      * @return array<string, mixed> empty when the index does not exist
      */
     public function getStats(string $index): array;
+
+    /**
+     * Indices in the cluster, optionally narrowed by an index pattern such as `kpa-*`.
+     *
+     * The cluster's index namespace is flat and shared by every app pointed at the node, so this
+     * is how an app finds indices it owns but never declared — a leftover from a rename, a locale
+     * variant, an index created outside the app. The registry alone cannot see those.
+     *
+     * @param string $pattern index pattern; `*` for everything
+     *
+     * @return list<array{index: string, health: ?string, status: ?string, docs: int, size: ?string, primaries: ?int, replicas: ?int}>
+     */
+    public function listIndices(string $pattern = '*'): array;
+
+    /**
+     * Mappings for every index matching the pattern, in one request.
+     *
+     * The per-index getters are fine for a detail page, but a page covering N indexes must not
+     * make 5N round trips — Elasticsearch answers `_mapping`, `_settings` and `_alias` for a whole
+     * pattern just as happily as for one index.
+     *
+     * @return array<string, array<string, mixed>> index name => its `mappings` block
+     */
+    public function listMappings(string $pattern = '*'): array;
+
+    /** @return array<string, array<string, mixed>> index name => its flat settings */
+    public function listSettings(string $pattern = '*'): array;
+
+    /** @return array<string, list<string>> index name => aliases pointing at it */
+    public function listAliases(string $pattern = '*'): array;
 }

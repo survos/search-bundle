@@ -96,6 +96,77 @@ final readonly class ElasticsearchClient implements ElasticsearchClientInterface
         return $body['_all']['primaries'] ?? [];
     }
 
+    public function listMappings(string $pattern = '*'): array
+    {
+        $body = $this->introspect(fn (): array => $this->response($this->client->indices()->getMapping(['index' => $pattern]))->asArray());
+
+        $mappings = [];
+        foreach ($body as $index => $definition) {
+            $mappings[(string) $index] = \is_array($definition) ? ($definition['mappings'] ?? []) : [];
+        }
+
+        return $mappings;
+    }
+
+    public function listSettings(string $pattern = '*'): array
+    {
+        $body = $this->introspect(fn (): array => $this->response($this->client->indices()->getSettings([
+            'index' => $pattern,
+            'flat_settings' => true,
+        ]))->asArray());
+
+        $settings = [];
+        foreach ($body as $index => $definition) {
+            $settings[(string) $index] = \is_array($definition) ? ($definition['settings'] ?? []) : [];
+        }
+
+        return $settings;
+    }
+
+    public function listAliases(string $pattern = '*'): array
+    {
+        $body = $this->introspect(fn (): array => $this->response($this->client->indices()->getAlias(['index' => $pattern]))->asArray());
+
+        $aliases = [];
+        foreach ($body as $index => $definition) {
+            $aliases[(string) $index] = \is_array($definition) ? array_map(strval(...), array_keys($definition['aliases'] ?? [])) : [];
+        }
+
+        return $aliases;
+    }
+
+    public function listIndices(string $pattern = '*'): array
+    {
+        $rows = $this->introspect(fn (): array => $this->response($this->client->cat()->indices([
+            'index' => $pattern,
+            'format' => 'json',
+            'h' => 'index,health,status,docs.count,store.size,pri,rep',
+            // Without this a pattern matching nothing is a 404 rather than an empty list.
+            'expand_wildcards' => 'open,closed',
+        ]))->asArray());
+
+        $indices = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row) || !isset($row['index'])) {
+                continue;
+            }
+
+            $indices[] = [
+                'index' => (string) $row['index'],
+                'health' => isset($row['health']) ? (string) $row['health'] : null,
+                'status' => isset($row['status']) ? (string) $row['status'] : null,
+                'docs' => (int) ($row['docs.count'] ?? 0),
+                'size' => isset($row['store.size']) ? (string) $row['store.size'] : null,
+                'primaries' => isset($row['pri']) ? (int) $row['pri'] : null,
+                'replicas' => isset($row['rep']) ? (int) $row['rep'] : null,
+            ];
+        }
+
+        usort($indices, static fn (array $a, array $b): int => strcmp($a['index'], $b['index']));
+
+        return $indices;
+    }
+
     /**
      * A missing index is a 404 from every introspection endpoint. That is an ordinary answer here
      * ("nothing to report"), not a failure — an admin page listing several searches must still
