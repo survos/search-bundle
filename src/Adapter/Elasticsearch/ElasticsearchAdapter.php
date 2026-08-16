@@ -47,6 +47,12 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
             'rankConstant' => 60,
             'rankWindowSize' => 100,
             'maxFacetValues' => 100,
+            // Mirrors index.max_result_window. Elasticsearch rejects from + size beyond this
+            // outright ("Result window is too large"), so the Pagination component clamps the page
+            // count against it rather than rendering links that are guaranteed to 400. Raise it
+            // only alongside the index setting -- and prefer search_after (survos/mono#42 item 7),
+            // since the cost of a deep `from` is what the limit is protecting the cluster from.
+            'maxResultWindow' => 10000,
             'highlight' => true,
             'explain' => false,
         ]);
@@ -67,7 +73,7 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
         $resolver->setAllowedTypes('vectorField', 'string');
         $resolver->setAllowedTypes('vectorDimensions', ['null', 'int']);
         $resolver->setAllowedValues('vectorSimilarity', ['cosine', 'dot_product', 'l2_norm', 'max_inner_product']);
-        foreach (['k', 'numCandidates', 'rankConstant', 'rankWindowSize', 'maxFacetValues'] as $integer) {
+        foreach (['k', 'numCandidates', 'rankConstant', 'rankWindowSize', 'maxFacetValues', 'maxResultWindow'] as $integer) {
             $resolver->setAllowedTypes($integer, 'int');
         }
         $resolver->setAllowedTypes('highlight', 'bool');

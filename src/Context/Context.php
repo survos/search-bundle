@@ -42,6 +42,16 @@ class Context
         return $this->search;
     }
 
+    /**
+     * $search is a non-nullable typed property, so getSearch() throws an Error rather than
+     * returning null when nothing set it. Anything reading it opportunistically -- a component
+     * that only wants an adapter parameter when one happens to be available -- has to ask first.
+     */
+    public function hasSearch(): bool
+    {
+        return isset($this->search);
+    }
+
     public function setSearch(SearchInterface $search): static
     {
         $this->search = $search;
