@@ -91,7 +91,8 @@ no `dist/`). harvest also had a template override, which the earlier draft said 
 - [ ] Mark `tacman/ux-search` abandoned on Packagist, replacement `survos/search-bundle`.
 - [ ] Archive `github.com/survos/ux-search`, or leave a README pointing at
       `survos/search-bundle`. The local clone at `~/tacman/ux-search` is in sync with
-      `origin` on `1.x`, so removing the directory loses nothing.
+      `origin` on `1.x`. Both local clones (`~/tacman/ux-search`, `~/sites/ux-search`) were
+      deleted 2026-08-16; the one unpushed commit in the latter is preserved as follow-up 4.
 - [ ] Leave the two upstream PRs ([#49](https://github.com/Mezcalito/ux-search/pull/49), #50)
       open — they still accurately describe upstream bugs and cost nothing to keep.
 
@@ -184,3 +185,36 @@ function search-bundle already provides, which reads
 and `json_encode`s the hit instead, so every app must copy the same override to get real
 result cards. Teaching the default template to use the hit template when the search provides
 one would delete that boilerplate from three apps.
+
+**4. Rescued from the retired ux-search repo: duplicate-facet guard (NOT yet ported).**
+`~/sites/ux-search` (branch `0.x`) held one unpushed commit, `400a103` of 2026-07-23,
+that never crossed the absorption. Both local clones were deleted 2026-08-16, so this
+is the only surviving copy — the commit was never pushed to
+`github.com/survos/ux-search` either.
+
+Its rationale, from the original message: `addFacet()` only ever appended, on the
+assumption `build()` runs once per instance. A shared/singleton search service (zm's
+`FolioRowSearch` was named) reused across two different configs in the same process
+silently accumulated facets from the prior `build()` into the next, and that mismatch
+surfaced far downstream as a confusing "Facet distribution X is not found" Twig error
+during template rendering — nowhere near the actual defect.
+
+`AbstractSearch::addFacet()` in search-bundle still just appends, so the bug is live:
+
+```php
+// prepend to the existing `$this->facets[] = new Facet(...)`
+foreach ($this->facets as $existing) {
+    if ($existing->getProperty() === $property) {
+        throw new \LogicException(sprintf(
+            'Facet "%s" is already configured for this search. build() was likely called '
+            .'more than once on the same instance without calling reset() first -- this '
+            .'search service may be shared (singleton) and reused across requests or widgets.',
+            $property,
+        ));
+    }
+}
+```
+
+Deliberately not applied here: turning a silent no-op into a `LogicException` is a
+behaviour change in a bundle four apps now depend on. Check mediary, zm, openfoto and
+harvest for any search that double-adds a facet before landing it.
