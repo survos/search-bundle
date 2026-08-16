@@ -1,8 +1,12 @@
 # Consumer migration after the ux-search absorption
 
-**Status:** DONE. mono, openfoto, harvest and zm are all migrated.
-Remaining: retire the package on Packagist, and the two follow-ups at the bottom.
+**Status:** DONE. mono, openfoto, harvest, zm and mediary are all migrated.
+Remaining: retire the package on Packagist, and the three follow-ups at the bottom.
 **Delete this file when the apps are migrated and the package is retired.**
+
+**mediary was a fifth consumer, missed by the original sweep** (migrated 2026-08-16).
+The grep in "Done — the three apps" below only covered `{zm,openfoto,harvest}`. Widen it
+to all of `~/sites/*` before believing this file again.
 
 [ADR-0003](ux-search-absorption.md) absorbed `tacman/ux-search` into SearchBundle but
 deferred its own migration steps 7 and 8 ("Retirement actions occur only after consumer
@@ -135,7 +139,36 @@ The collision was invisible until now because folio-bundle gated its own `FolioR
 version never registered at all. Worth considering whether `RegisterSearchPass` should throw
 on a duplicate name instead of silently dropping one.
 
-**2. `hitTemplate` should work without an app override.** openfoto and harvest both ship a
+**2. The `ux-search` Stimulus controllers never bind — in any app.** Found while migrating
+mediary, but it is a bundle-wide defect, not a mediary one. `templates/Layout.html.twig`
+emits `data-controller: 'ux-search'`, `Facet/RefinementList.html.twig` emits
+`'ux-search--refinement-list'`, `Facet/RangeSlider.html.twig` emits `'ux-search-range-slider'`.
+StimulusBundle registers third-party UX controllers under `<scope>--<package>--<name>`, so
+what actually lands in the generated controllers map is:
+
+```
+"survos--search-bundle--ux-search"
+"survos--search-bundle--ux-search--refinement-list"
+"survos--search-bundle--ux-search-range-slider"
+```
+
+Verified on mediary by fetching `/assets/@symfony/stimulus-bundle/controllers-*.js` off a
+rendered `/media/search`. Nothing matches the bare identifiers, so `updateUrl` (the
+pushState/history rewriting behind `enableUrlRewriting()`), `toggleFacetCollapse`, and the
+range slider are all dead. Search still works because Live Component drives it server-side —
+which is why this went unnoticed. Predates the absorption: the same mismatch existed under
+`@tacman/ux-search` (`tacman--ux-search--ux-search`) and upstream `@mezcalito/…`.
+
+openfoto, zm and harvest additionally have **no `assets/controllers.json` block at all** —
+Flex's `PackageJsonSynchronizer` dropped it when `tacman/ux-search` was uninstalled and did
+not re-add one for `survos/search-bundle`. So those three also lose the
+`@survos/search-bundle/styles/ux-search.css` autoimport and render the search UI unstyled.
+mediary's block was restored by hand in the same commit.
+
+Fix is either the three template identifiers, or a `stimulus_controller()` call that resolves
+the name properly. Both need the controllers.json block present in each app.
+
+**3. `hitTemplate` should work without an app override.** openfoto and harvest both ship a
 `Hits.html.twig` override whose only job is to call `survos_hit_template()` — the Twig
 function search-bundle already provides, which reads
 `HitTemplateSearchInterface::getHitTemplate()`. The bundle's own `Hits.html.twig` ignores it
