@@ -55,7 +55,7 @@
         {% block form %}
             <form
                 class="ux-search-range-input__form d-flex flex-column gap-2"
-                {{ stimulus_action(_sc, 'updateFacetRange', 'submit:prevent', {
+                {{ stimulus_action(_sc, 'updateFacetRange:prevent', 'submit', {
                     property: property,
                     rangeMin: facetStat.min,
                     rangeMax: facetStat.max

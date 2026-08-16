@@ -55,7 +55,7 @@
         <form
             class="ux-search-range-slider__form"
             {{ stimulus_target(_rs, 'form') }}
-            {{ stimulus_action(_sc, 'updateFacetRange', 'submit:prevent', {
+            {{ stimulus_action(_sc, 'updateFacetRange:prevent', 'submit', {
                 property: property,
                 rangeMin: facetStat.min,
                 rangeMax: facetStat.max
