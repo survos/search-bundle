@@ -53,6 +53,67 @@ final readonly class ElasticsearchClient implements ElasticsearchClientInterface
         }
     }
 
+    public function getMapping(string $index): array
+    {
+        $body = $this->introspect(fn (): array => $this->response($this->client->indices()->getMapping(['index' => $index]))->asArray());
+
+        // Keyed by the concrete index name, which differs from $index when $index is an alias.
+        $first = reset($body);
+
+        return \is_array($first) ? ($first['mappings'] ?? []) : [];
+    }
+
+    public function getSettings(string $index): array
+    {
+        $body = $this->introspect(fn (): array => $this->response($this->client->indices()->getSettings([
+            'index' => $index,
+            'flat_settings' => true,
+        ]))->asArray());
+
+        $first = reset($body);
+
+        return \is_array($first) ? ($first['settings'] ?? []) : [];
+    }
+
+    public function getAliases(string $index): array
+    {
+        $body = $this->introspect(fn (): array => $this->response($this->client->indices()->getAlias(['index' => $index]))->asArray());
+
+        $aliases = [];
+        foreach ($body as $definition) {
+            if (\is_array($definition)) {
+                $aliases = [...$aliases, ...array_keys($definition['aliases'] ?? [])];
+            }
+        }
+
+        return array_values(array_unique($aliases));
+    }
+
+    public function getStats(string $index): array
+    {
+        $body = $this->introspect(fn (): array => $this->response($this->client->indices()->stats(['index' => $index]))->asArray());
+
+        return $body['_all']['primaries'] ?? [];
+    }
+
+    /**
+     * A missing index is a 404 from every introspection endpoint. That is an ordinary answer here
+     * ("nothing to report"), not a failure — an admin page listing several searches must still
+     * render when one of them has never been created.
+     *
+     * @param callable(): array<string, mixed> $call
+     *
+     * @return array<string, mixed>
+     */
+    private function introspect(callable $call): array
+    {
+        try {
+            return $call();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
     private function response(mixed $response): Elasticsearch
     {
         if (!$response instanceof Elasticsearch) {
