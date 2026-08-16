@@ -139,8 +139,17 @@ The collision was invisible until now because folio-bundle gated its own `FolioR
 version never registered at all. Worth considering whether `RegisterSearchPass` should throw
 on a duplicate name instead of silently dropping one.
 
-**2. The `ux-search` Stimulus controllers never bind — in any app.** Found while migrating
-mediary, but it is a bundle-wide defect, not a mediary one. `templates/Layout.html.twig`
+**2. The `ux-search` Stimulus controllers never bind — in any app.** RESOLVED in 2.24.7
+(mono `327d88b7`); all four consumers updated 2026-08-16 — mediary, openfoto, zm, harvest.
+Root cause was three violations of the rules in `bu/AGENTS.md`: no `symfony-ux` composer
+keyword (so Flex's `PackageJsonSynchronizer` skipped the package entirely and deleted the
+`assets/controllers.json` block), the bundle extended `AbstractSurvosBundle` instead of
+`AbstractUxBundle` so the dev-time guard for exactly that mistake never ran, and the
+templates hard-coded controller ids instead of using `survos_stimulus()`. Note the keyword
+only takes effect once a release reaches Packagist — Flex reads `installed.json`, not a
+`mono/link` symlink. Original diagnosis follows.
+
+Found while migrating mediary, but it is a bundle-wide defect, not a mediary one. `templates/Layout.html.twig`
 emits `data-controller: 'ux-search'`, `Facet/RefinementList.html.twig` emits
 `'ux-search--refinement-list'`, `Facet/RangeSlider.html.twig` emits `'ux-search-range-slider'`.
 StimulusBundle registers third-party UX controllers under `<scope>--<package>--<name>`, so
