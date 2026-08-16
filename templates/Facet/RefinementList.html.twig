@@ -1,18 +1,24 @@
 {% set valuesCount = distribution.values|length %}
 {% set hasMultipleValues = valuesCount > 1 %}
 {% set hasShowMore = valuesCount > this.limit %}
+{# Controller ids come from kit-bundle's survos_stimulus() (see bu/AGENTS.md); never
+   hand-write the `survos--search-bundle--…` form. The `data-ux-search-facet-*`
+   attributes below are deliberately NOT stimulus_* calls -- controller.js reads those
+   by closest()/querySelector()/dataset, so they are plain markers, not scoped values. #}
+{% set _sc = survos_stimulus('search-bundle', 'ux-search') %}
+{% set _rl = survos_stimulus('search-bundle', 'ux-search--refinement-list') %}
 <fieldset {{ attributes.defaults({
     class: 'ux-search-facet ux-search-refinement-list',
     'data-skip-morph': true,
-    'data-controller': 'ux-search--refinement-list',
-    'data-ux-search--refinement-list-limit-value': this.limit,
-    'data-ux-search--refinement-list-value-type-value': this.valueType|default('auto'),
     'data-ux-search-facet-collapsed': (this.collapsible and this.collapsed) ? 'true' : 'false',
     'data-ux-search-facet-expand-label': 'facet.expand'|trans({'%facet%': label}, domain='survos_search'),
-    'data-ux-search-facet-collapse-label': 'facet.collapse'|trans({'%facet%': label}, domain='survos_search'),
-    'data-ux-search--refinement-list-show-more-label-value': 'show_more'|trans(domain='survos_search'),
-    'data-ux-search--refinement-list-show-less-label-value': 'show_less'|trans(domain='survos_search')
-}) }}>
+    'data-ux-search-facet-collapse-label': 'facet.collapse'|trans({'%facet%': label}, domain='survos_search')
+}|merge(stimulus_controller(_rl, {
+    limit: this.limit,
+    valueType: this.valueType|default('auto'),
+    showMoreLabel: 'show_more'|trans(domain='survos_search'),
+    showLessLabel: 'show_less'|trans(domain='survos_search')
+}).toArray())) }}>
     <legend class="ux-search-facet__title ux-search-refinement-list__title ux-search-refinement-list__header d-flex align-items-center justify-content-between gap-2">
         <span class="ux-search-facet__title-group ux-search-refinement-list__title-group d-inline-flex align-items-center gap-1 min-w-0">
             <span
@@ -23,11 +29,9 @@
                     aria-expanded="{{ this.collapsed ? 'false' : 'true' }}"
                     aria-controls="{{ property }}-facet-panel"
                     data-ux-search-facet-toggle
-                    data-action="
-                        click->ux-search#toggleFacetCollapse
-                        keydown.enter->ux-search#toggleFacetCollapse
-                        keydown.space->ux-search#toggleFacetCollapse
-                    "
+                    {{ stimulus_action(_sc, 'toggleFacetCollapse', 'click')
+                        |stimulus_action(_sc, 'toggleFacetCollapse', 'keydown.enter')
+                        |stimulus_action(_sc, 'toggleFacetCollapse', 'keydown.space') }}
                 {% endif %}
             >{% block label %}{{ label }}{% endblock %}</span>
             {% if this.collapsible %}
@@ -37,7 +41,7 @@
                     aria-expanded="{{ this.collapsed ? 'false' : 'true' }}"
                     aria-controls="{{ property }}-facet-panel"
                     data-ux-search-facet-toggle
-                    data-action="ux-search#toggleFacetCollapse"
+                    {{ stimulus_action(_sc, 'toggleFacetCollapse') }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
                     <span class="ux-search-sr-only" data-ux-search-facet-label>
@@ -65,17 +69,17 @@
                         id="{{ property }}-facet-sort"
                         tabindex="-1"
                         aria-hidden="true"
-                        data-ux-search--refinement-list-target="sort"
-                        data-action="change->ux-search--refinement-list#sort"
+                        {{ stimulus_target(_rl, 'sort') }}
+                        {{ stimulus_action(_rl, 'sort', 'change') }}
                     >
                         <option value="count_desc">{{ countDescLabel }}</option>
                         <option value="count_asc">{{ countAscLabel }}</option>
-                        <option value="string_asc" data-ux-search--refinement-list-target="sortOption" data-value-type="string">{{ stringAscLabel }}</option>
-                        <option value="string_desc" data-ux-search--refinement-list-target="sortOption" data-value-type="string">{{ stringDescLabel }}</option>
-                        <option value="number_asc" data-ux-search--refinement-list-target="sortOption" data-value-type="number">{{ numberAscLabel }}</option>
-                        <option value="number_desc" data-ux-search--refinement-list-target="sortOption" data-value-type="number">{{ numberDescLabel }}</option>
-                        <option value="date_desc" data-ux-search--refinement-list-target="sortOption" data-value-type="date">{{ dateDescLabel }}</option>
-                        <option value="date_asc" data-ux-search--refinement-list-target="sortOption" data-value-type="date">{{ dateAscLabel }}</option>
+                        <option value="string_asc" {{ stimulus_target(_rl, 'sortOption') }} data-value-type="string">{{ stringAscLabel }}</option>
+                        <option value="string_desc" {{ stimulus_target(_rl, 'sortOption') }} data-value-type="string">{{ stringDescLabel }}</option>
+                        <option value="number_asc" {{ stimulus_target(_rl, 'sortOption') }} data-value-type="number">{{ numberAscLabel }}</option>
+                        <option value="number_desc" {{ stimulus_target(_rl, 'sortOption') }} data-value-type="number">{{ numberDescLabel }}</option>
+                        <option value="date_desc" {{ stimulus_target(_rl, 'sortOption') }} data-value-type="date">{{ dateDescLabel }}</option>
+                        <option value="date_asc" {{ stimulus_target(_rl, 'sortOption') }} data-value-type="date">{{ dateAscLabel }}</option>
                     </select>
                     <button
                         class="ux-search-refinement-list__sort-toggle btn btn-action btn-sm dropdown-toggle"
@@ -83,42 +87,42 @@
                         title="{{ countDescLabel }}"
                         aria-label="{{ countDescLabel }}"
                         data-bs-toggle="dropdown"
-                        data-ux-search--refinement-list-target="sortToggle"
+                        {{ stimulus_target(_rl, 'sortToggle') }}
                     >
-                        <span class="ux-search-refinement-list__sort-icon" data-ux-search--refinement-list-target="sortIcon">
+                        <span class="ux-search-refinement-list__sort-icon" {{ stimulus_target(_rl, 'sortIcon') }}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16h2"/><path d="M11 12h2"/><path d="M15 8h2"/></svg>
                         </span>
                     </button>
                     <div class="ux-search-refinement-list__sort-menu dropdown-menu dropdown-menu-end">
-                        <button class="dropdown-item d-flex align-items-center gap-2 active" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="count_desc" data-sort-label="{{ countDescLabel }}" data-action="ux-search--refinement-list#selectSort" aria-selected="true">
+                        <button class="dropdown-item d-flex align-items-center gap-2 active" type="button" {{ stimulus_target(_rl, 'sortChoice') }} data-sort-value="count_desc" data-sort-label="{{ countDescLabel }}" {{ stimulus_action(_rl, 'selectSort') }} aria-selected="true">
                             <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16h2"/><path d="M11 12h2"/><path d="M15 8h2"/></svg></span>
                             <span>{{ countDescLabel }}</span>
                         </button>
-                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="count_asc" data-sort-label="{{ countAscLabel }}" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" {{ stimulus_target(_rl, 'sortChoice') }} data-sort-value="count_asc" data-sort-label="{{ countAscLabel }}" {{ stimulus_action(_rl, 'selectSort') }} aria-selected="false">
                             <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 8h2"/><path d="M11 12h2"/><path d="M15 16h2"/></svg></span>
                             <span>{{ countAscLabel }}</span>
                         </button>
-                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="string_asc" data-sort-label="{{ stringAscLabel }}" data-value-type="string" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" {{ stimulus_target(_rl, 'sortChoice') }} data-sort-value="string_asc" data-sort-label="{{ stringAscLabel }}" data-value-type="string" {{ stimulus_action(_rl, 'selectSort') }} aria-selected="false">
                             <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M20 8h-5"/><path d="M15 4h5v8h-5"/></svg></span>
                             <span>{{ stringAscLabel }}</span>
                         </button>
-                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="string_desc" data-sort-label="{{ stringDescLabel }}" data-value-type="string" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" {{ stimulus_target(_rl, 'sortChoice') }} data-sort-value="string_desc" data-sort-label="{{ stringDescLabel }}" data-value-type="string" {{ stimulus_action(_rl, 'selectSort') }} aria-selected="false">
                             <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M15 4h5l-5 8h5"/></svg></span>
                             <span>{{ stringDescLabel }}</span>
                         </button>
-                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="number_asc" data-sort-label="{{ numberAscLabel }}" data-value-type="number" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" {{ stimulus_target(_rl, 'sortChoice') }} data-sort-value="number_asc" data-sort-label="{{ numberAscLabel }}" data-value-type="number" {{ stimulus_action(_rl, 'selectSort') }} aria-selected="false">
                             <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M17 10V4h-2"/><path d="M15 20h4v-6h-4z"/></svg></span>
                             <span>{{ numberAscLabel }}</span>
                         </button>
-                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="number_desc" data-sort-label="{{ numberDescLabel }}" data-value-type="number" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" {{ stimulus_target(_rl, 'sortChoice') }} data-sort-value="number_desc" data-sort-label="{{ numberDescLabel }}" data-value-type="number" {{ stimulus_action(_rl, 'selectSort') }} aria-selected="false">
                             <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M17 14v6h-2"/><path d="M15 10h4V4h-4z"/></svg></span>
                             <span>{{ numberDescLabel }}</span>
                         </button>
-                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="date_desc" data-sort-label="{{ dateDescLabel }}" data-value-type="date" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" {{ stimulus_target(_rl, 'sortChoice') }} data-sort-value="date_desc" data-sort-label="{{ dateDescLabel }}" data-value-type="date" {{ stimulus_action(_rl, 'selectSort') }} aria-selected="false">
                             <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 3 3 3-3"/></svg></span>
                             <span>{{ dateDescLabel }}</span>
                         </button>
-                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" data-ux-search--refinement-list-target="sortChoice" data-sort-value="date_asc" data-sort-label="{{ dateAscLabel }}" data-value-type="date" data-action="ux-search--refinement-list#selectSort" aria-selected="false">
+                        <button class="dropdown-item d-flex align-items-center gap-2" type="button" {{ stimulus_target(_rl, 'sortChoice') }} data-sort-value="date_asc" data-sort-label="{{ dateAscLabel }}" data-value-type="date" {{ stimulus_action(_rl, 'selectSort') }} aria-selected="false">
                             <span class="ux-search-refinement-list__sort-choice-icon" data-sort-icon><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 17 3-3 3 3"/></svg></span>
                             <span>{{ dateAscLabel }}</span>
                         </button>
@@ -145,18 +149,18 @@
                         id="{{ property }}-facet-search"
                         placeholder="{{ 'facet.search_placeholder'|trans(domain='survos_search') }}"
                         autocomplete="off"
-                        data-ux-search--refinement-list-target="searchInput"
-                        data-action="input->ux-search--refinement-list#search"
+                        {{ stimulus_target(_rl, 'searchInput') }}
+                        {{ stimulus_action(_rl, 'search', 'input') }}
                     >
                 </div>
             {% endblock %}
         {% endif %}
         {% block list %}
-            <ul class="ux-search-refinement-list__list" data-ux-search--refinement-list-target="list">
+            <ul class="ux-search-refinement-list__list" {{ stimulus_target(_rl, 'list') }}>
                 {%- for key,value in distribution.values %}
                     <li
                         class="ux-search-refinement-list__item{{ loop.index > this.limit ? ' ux-search-refinement-list__item--exceed-limit' }}"
-                        data-ux-search--refinement-list-target="item"
+                        {{ stimulus_target(_rl, 'item') }}
                     >
                         <input
                             class="ux-search-refinement-list__input"
@@ -170,8 +174,8 @@
                             data-live-value-param="{{ key }}"
                         >
                         <label class="ux-search-refinement-list__label" for="{{ property }}-{{ key }}">
-                            <span class="ux-search-refinement-list__label-text" data-ux-search--refinement-list-target="label">{{ key }}</span>
-                            <span class="ux-search-refinement-list__count" data-ux-search--refinement-list-target="count">{{ value }}</span>
+                            <span class="ux-search-refinement-list__label-text" {{ stimulus_target(_rl, 'label') }}>{{ key }}</span>
+                            <span class="ux-search-refinement-list__count" {{ stimulus_target(_rl, 'count') }}>{{ value }}</span>
                         </label>
                     </li>
                 {% endfor -%}
@@ -181,7 +185,7 @@
             {% block no_results %}
                 <p
                     class="ux-search-refinement-list__no-results text-secondary small"
-                    data-ux-search--refinement-list-target="noResults"
+                    {{ stimulus_target(_rl, 'noResults') }}
                     hidden
                 >
                     {{ 'facet.no_search_results'|trans(domain='survos_search') }}
@@ -193,8 +197,8 @@
                 <button
                     class="ux-search-refinement-list__show-more"
                     type="button"
-                    data-ux-search--refinement-list-target="toggle"
-                    data-action="ux-search--refinement-list#toggleShowMore"
+                    {{ stimulus_target(_rl, 'toggle') }}
+                    {{ stimulus_action(_rl, 'toggleShowMore') }}
                 >
                     {{ 'show_more'|trans(domain='survos_search') }}
                 </button>

@@ -7,7 +7,7 @@ namespace Survos\SearchBundle;
 use Doctrine\Persistence\ManagerRegistry;
 use Survos\FieldBundle\Service\FieldReader;
 use Survos\FieldBundle\SurvosFieldBundle;
-use Survos\Kit\AbstractSurvosBundle;
+use Survos\Kit\AbstractUxBundle;
 use Survos\Kit\SurvosKitBundle;
 use Survos\Kit\Traits\HasConfigurableRoutes;
 use Survos\SearchBundle\Adapter\AdapterFactoryInterface;
@@ -52,7 +52,7 @@ use Symfony\UX\Icons\UXIconsBundle;
 #[RequiredBundle(SurvosFieldBundle::class)]
 #[RequiredBundle(UXIconsBundle::class)]
 // Symfony\Component\HttpKernel\Bundle\Bundle <-- Flex auto-registration marker (see Survos\Kit\AbstractSurvosBundle)
-final class SurvosSearchBundle extends AbstractSurvosBundle
+final class SurvosSearchBundle extends AbstractUxBundle
 {
     use HasConfigurableRoutes;
 

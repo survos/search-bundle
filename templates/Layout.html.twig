@@ -1,8 +1,13 @@
+{# Resolve the controller id through kit-bundle's helper (see bu/AGENTS.md) rather
+   than hard-coding it. Hard-coding `data-controller="ux-search"` here is exactly why
+   this controller never mounted in any consumer app: StimulusBundle registers it as
+   `survos--search-bundle--ux-search`. survos_stimulus() derives that and validates it
+   in dev against the installed UX bundles. #}
+{% set _sc = survos_stimulus('search-bundle', 'ux-search') %}
 <div {{ attributes.defaults({
     'class': 'ux-search',
-    'data-controller': 'ux-search',
     'data-loading': 'addClass(ux-search--is-loading)'
-}) }}>
+}|merge(stimulus_controller(_sc).toArray())) }}>
     {% block content %}
         <div class="ux-search__inner">
             <div class="ux-search__header">

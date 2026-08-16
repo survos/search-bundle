@@ -1,3 +1,7 @@
+{# Controller id via kit-bundle's survos_stimulus() -- see bu/AGENTS.md. This facet has
+   no controller of its own; it only dispatches to the parent ux-search controller. The
+   `data-ux-search-facet-*` markers are plain dataset reads, not scoped values. #}
+{% set _sc = survos_stimulus('search-bundle', 'ux-search') %}
 <fieldset {{ attributes.defaults({
     'class': 'ux-search-facet ux-search-range-input card',
     'data-ux-search-facet-collapsed': (this.collapsible and this.collapsed) ? 'true' : 'false',
@@ -15,11 +19,9 @@
                     aria-expanded="{{ this.collapsed ? 'false' : 'true' }}"
                     aria-controls="{{ property }}-facet-panel"
                     data-ux-search-facet-toggle
-                    data-action="
-                        click->ux-search#toggleFacetCollapse
-                        keydown.enter->ux-search#toggleFacetCollapse
-                        keydown.space->ux-search#toggleFacetCollapse
-                    "
+                    {{ stimulus_action(_sc, 'toggleFacetCollapse', 'click')
+                        |stimulus_action(_sc, 'toggleFacetCollapse', 'keydown.enter')
+                        |stimulus_action(_sc, 'toggleFacetCollapse', 'keydown.space') }}
                 {% endif %}
             >
                 {% block label %}
@@ -33,7 +35,7 @@
                     aria-expanded="{{ this.collapsed ? 'false' : 'true' }}"
                     aria-controls="{{ property }}-facet-panel"
                     data-ux-search-facet-toggle
-                    data-action="ux-search#toggleFacetCollapse"
+                    {{ stimulus_action(_sc, 'toggleFacetCollapse') }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
                     <span class="ux-search-sr-only" data-ux-search-facet-label>
@@ -53,10 +55,11 @@
         {% block form %}
             <form
                 class="ux-search-range-input__form d-flex flex-column gap-2"
-                data-action="submit->ux-search#updateFacetRange:prevent"
-                data-ux-search-property-param="{{ property }}"
-                data-ux-search-range-min-param="{{ facetStat.min }}"
-                data-ux-search-range-max-param="{{ facetStat.max }}"
+                {{ stimulus_action(_sc, 'updateFacetRange', 'submit:prevent', {
+                    property: property,
+                    rangeMin: facetStat.min,
+                    rangeMax: facetStat.max
+                }) }}
             >
                 <div class="ux-search-range-input__box">
                     <label

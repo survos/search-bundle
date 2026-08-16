@@ -3,6 +3,7 @@
     "description": "First-party Symfony search kernel and faceted UX with field-driven Doctrine, Meilisearch, Algolia, SQLite FTS5, PostgreSQL BM25, and Elasticsearch adapters.",
     "type": "symfony-bundle",
     "license": "MIT",
+    "keywords": ["symfony", "symfony-ux", "ux", "search", "facets", "meilisearch", "elasticsearch"],
     "require": {
         "php": "^8.5",
         "doctrine/dbal": "^4.3",

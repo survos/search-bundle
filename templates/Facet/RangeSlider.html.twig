@@ -1,13 +1,18 @@
+{# Controller ids via kit-bundle's survos_stimulus() -- see bu/AGENTS.md. The
+   `data-ux-search-facet-*` attributes are plain markers read by closest()/dataset in
+   controller.js, so they stay literal and are not scoped to an identifier. #}
+{% set _sc = survos_stimulus('search-bundle', 'ux-search') %}
+{% set _rs = survos_stimulus('search-bundle', 'ux-search-range-slider') %}
 <fieldset {{ attributes.defaults({
     'class': 'ux-search-facet ux-search-range-slider card',
-    'data-controller': 'ux-search-range-slider',
-    'data-ux-search-range-slider-leading-value': this.leading|default(''),
-    'data-ux-search-range-slider-trailing-value': this.trailing|default(''),
     'data-ux-search-facet-collapsed': (this.collapsible and this.collapsed) ? 'true' : 'false',
     'data-ux-search-facet-expand-label': 'facet.expand'|trans({'%facet%': label}, domain='survos_search'),
     'data-ux-search-facet-collapse-label': 'facet.collapse'|trans({'%facet%': label}, domain='survos_search'),
     'data-skip-morph': true
-}) }}>
+}|merge(stimulus_controller(_rs, {
+    leading: this.leading|default(''),
+    trailing: this.trailing|default('')
+}).toArray())) }}>
     <legend class="ux-search-facet__title card-header d-flex align-items-center justify-content-between gap-2">
         <span class="ux-search-facet__title-group d-inline-flex align-items-center gap-1 min-w-0">
             <span
@@ -18,11 +23,9 @@
                     aria-expanded="{{ this.collapsed ? 'false' : 'true' }}"
                     aria-controls="{{ property }}-facet-panel"
                     data-ux-search-facet-toggle
-                    data-action="
-                        click->ux-search#toggleFacetCollapse
-                        keydown.enter->ux-search#toggleFacetCollapse
-                        keydown.space->ux-search#toggleFacetCollapse
-                    "
+                    {{ stimulus_action(_sc, 'toggleFacetCollapse', 'click')
+                        |stimulus_action(_sc, 'toggleFacetCollapse', 'keydown.enter')
+                        |stimulus_action(_sc, 'toggleFacetCollapse', 'keydown.space') }}
                 {% endif %}
             >{{ label }}</span>
             {% if this.collapsible %}
@@ -32,7 +35,7 @@
                     aria-expanded="{{ this.collapsed ? 'false' : 'true' }}"
                     aria-controls="{{ property }}-facet-panel"
                     data-ux-search-facet-toggle
-                    data-action="ux-search#toggleFacetCollapse"
+                    {{ stimulus_action(_sc, 'toggleFacetCollapse') }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
                     <span class="ux-search-sr-only" data-ux-search-facet-label>
@@ -51,11 +54,12 @@
     >
         <form
             class="ux-search-range-slider__form"
-            data-ux-search-range-slider-target="form"
-            data-action="submit->ux-search#updateFacetRange:prevent"
-            data-ux-search-property-param="{{ property }}"
-            data-ux-search-range-min-param="{{ facetStat.min }}"
-            data-ux-search-range-max-param="{{ facetStat.max }}"
+            {{ stimulus_target(_rs, 'form') }}
+            {{ stimulus_action(_sc, 'updateFacetRange', 'submit:prevent', {
+                property: property,
+                rangeMin: facetStat.min,
+                rangeMax: facetStat.max
+            }) }}
         >
             <input
                 id="{{ property }}-min"
@@ -69,14 +73,12 @@
                 placeholder="{{ facetStat.min }}"
                 value="{{ (facetStat.userMin is not null) ? facetStat.userMin : facetStat.min }}"
                 step="{{ this.step }}"
-                data-ux-search-range-slider-target="minInput"
-                data-action="
-                    input->ux-search-range-slider#updateCeil
-                    focus->ux-search-range-slider#updateCeil
-                    mousedown->ux-search-range-slider#updateCeil
-                    touchstart->ux-search-range-slider#updateCeil
-                    change->ux-search-range-slider#submit
-                "
+                {{ stimulus_target(_rs, 'minInput') }}
+                {{ stimulus_action(_rs, 'updateCeil', 'input')
+                    |stimulus_action(_rs, 'updateCeil', 'focus')
+                    |stimulus_action(_rs, 'updateCeil', 'mousedown')
+                    |stimulus_action(_rs, 'updateCeil', 'touchstart')
+                    |stimulus_action(_rs, 'submit', 'change') }}
             />
 
             <input
@@ -91,14 +93,12 @@
                 placeholder="{{ facetStat.max }}"
                 value="{{ (facetStat.userMax is not null) ? facetStat.userMax : facetStat.max }}"
                 step="{{ this.step }}"
-                data-ux-search-range-slider-target="maxInput"
-                data-action="
-                    input->ux-search-range-slider#updateFloor
-                    focus->ux-search-range-slider#updateFloor
-                    mousedown->ux-search-range-slider#updateFloor
-                    touchstart->ux-search-range-slider#updateFloor
-                    change->ux-search-range-slider#submit
-                "
+                {{ stimulus_target(_rs, 'maxInput') }}
+                {{ stimulus_action(_rs, 'updateFloor', 'input')
+                    |stimulus_action(_rs, 'updateFloor', 'focus')
+                    |stimulus_action(_rs, 'updateFloor', 'mousedown')
+                    |stimulus_action(_rs, 'updateFloor', 'touchstart')
+                    |stimulus_action(_rs, 'submit', 'change') }}
             />
         </form>
 
@@ -106,7 +106,7 @@
             <span
                 id="{{ property }}-min-value"
                 class="ux-search-range-slider__value ux-search-range-slider__value--min badge bg-secondary-lt"
-                data-ux-search-range-slider-target="minValue"
+                {{ stimulus_target(_rs, 'minValue') }}
             >
                 {{ this.leading ~ facetStat.userMin|default(facetStat.min) ~ this.trailing }}
             </span>
@@ -114,7 +114,7 @@
             <span
                 id="{{ property }}-max-value"
                 class="ux-search-range-slider__value ux-search-range-slider__value--max badge bg-secondary-lt"
-                data-ux-search-range-slider-target="maxValue"
+                {{ stimulus_target(_rs, 'maxValue') }}
             >
                 {{ this.leading ~ facetStat.userMax|default(facetStat.max) ~ this.trailing }}
             </span>
