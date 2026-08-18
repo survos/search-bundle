@@ -113,13 +113,13 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         $params['offset'] = $offset;
 
         $usesFts = $this->usesFts($query);
-        $score = $usesFts ? sprintf('bm25(%s)', $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable'))) : '0';
+        $score = $usesFts ? sprintf('bm25(%s)', $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('ftsTable'))) : '0';
 
         $sql = sprintf(
             'SELECT %s, %s AS _score FROM %s%s%s %s LIMIT :limit OFFSET :offset',
             $this->selectList($this->connection, $search->getResolvedAdapterParameter('selectColumns')),
             $score,
-            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
+            $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
             $this->joinClause($search, $usesFts),
             $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
             $orderBy,
@@ -133,7 +133,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
 
         $countSql = sprintf(
             'SELECT COUNT(*) FROM %s%s%s',
-            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
+            $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
             $this->joinClause($search, $usesFts),
             $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
         );
@@ -164,7 +164,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             // the highly-selective FTS match drives the join; they bind :ftsQuery but
             // do not want the MATCH predicate inlined here.
             if ($ftsInWhere) {
-                $where[] = sprintf('%s MATCH :ftsQuery', $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable')));
+                $where[] = sprintf('%s MATCH :ftsQuery', $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('ftsTable')));
             }
         }
 
@@ -225,7 +225,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
                 // per-core aggregate directly (core='' when no core is selected) — no JOIN, no EXISTS.
                 $sql = sprintf(
                     'SELECT value, total FROM %s WHERE core = :facetCore AND field = :facetField ORDER BY total DESC LIMIT :maxFacetValues',
-                    $this->connection->quoteIdentifier($countTable),
+                    $this->connection->quoteSingleIdentifier($countTable),
                 );
                 $params['facetField'] = $facet->getProperty();
                 $params['facetCore'] = $coreScope;
@@ -236,8 +236,8 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
                 $sql = sprintf(
                     '%sSELECT fv.value AS value, COUNT(*) AS total FROM %s fv JOIN %s ON d.rowid = fv.item_rowid%s%s GROUP BY fv.value ORDER BY total DESC LIMIT :maxFacetValues',
                     $this->ftsCtePrefix($search, $usesFts),
-                    $this->connection->quoteIdentifier($valueTable),
-                    $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
+                    $this->connection->quoteSingleIdentifier($valueTable),
+                    $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
                     $this->joinClause($search, $usesFts, '__fts'),
                     ' WHERE ' . implode(' AND ', $where),
                 );
@@ -247,7 +247,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
                     '%sSELECT %s AS value, COUNT(*) AS total FROM %s%s%s GROUP BY %s ORDER BY total DESC LIMIT :maxFacetValues',
                     $this->ftsCtePrefix($search, $usesFts),
                     $column,
-                    $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
+                    $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
                     $this->joinClause($search, $usesFts, '__fts'),
                     $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
                     $column,
@@ -296,7 +296,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
                 $this->ftsCtePrefix($search, $usesFts),
                 $column,
                 $column,
-                $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
+                $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
                 $this->joinClause($search, $usesFts, '__fts'),
                 $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
             );
@@ -341,7 +341,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
 
         // The CTE in ftsCtePrefix() is aliased back to `f`, so the configured
         // joinExpression (default `f.rowid = d.rowid`) works against either source.
-        $source = $ftsSource ?? $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable'));
+        $source = $ftsSource ?? $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('ftsTable'));
 
         return sprintf(
             ' JOIN %s f ON %s',
@@ -362,7 +362,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             return '';
         }
 
-        $fts = $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('ftsTable'));
+        $fts = $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('ftsTable'));
 
         return sprintf('WITH __fts AS MATERIALIZED (SELECT rowid FROM %1$s WHERE %1$s MATCH :ftsQuery) ', $fts);
     }

@@ -108,13 +108,13 @@ final class SearchIndexCommand
         }
 
         if ($drop) {
-            $connection->executeStatement(sprintf('DROP TABLE IF EXISTS %s', $connection->quoteIdentifier($ftsTable)));
+            $connection->executeStatement(sprintf('DROP TABLE IF EXISTS %s', $connection->quoteSingleIdentifier($ftsTable)));
         }
 
-        $columns = implode(', ', array_map($connection->quoteIdentifier(...), $searchFields));
+        $columns = implode(', ', array_map($connection->quoteSingleIdentifier(...), $searchFields));
         $sql = sprintf(
             'CREATE VIRTUAL TABLE IF NOT EXISTS %s USING fts5(%s, content=%s, content_rowid=%s)',
-            $connection->quoteIdentifier($ftsTable),
+            $connection->quoteSingleIdentifier($ftsTable),
             $columns,
             $connection->quote($table),
             $connection->quote($idColumn),
@@ -124,8 +124,8 @@ final class SearchIndexCommand
         if ($rebuild) {
             $connection->executeStatement(sprintf(
                 'INSERT INTO %s(%s) VALUES (%s)',
-                $connection->quoteIdentifier($ftsTable),
-                $connection->quoteIdentifier($ftsTable),
+                $connection->quoteSingleIdentifier($ftsTable),
+                $connection->quoteSingleIdentifier($ftsTable),
                 $connection->quote('rebuild'),
             ));
         }
@@ -156,13 +156,13 @@ final class SearchIndexCommand
 
         $indexName = sprintf('idx_%s_search_fts', preg_replace('/[^A-Za-z0-9_]/', '_', $table) ?: $table);
         if ($drop) {
-            $connection->executeStatement(sprintf('DROP INDEX IF EXISTS %s', $connection->quoteIdentifier($indexName)));
+            $connection->executeStatement(sprintf('DROP INDEX IF EXISTS %s', $connection->quoteSingleIdentifier($indexName)));
         }
 
         $connection->executeStatement(sprintf(
             'CREATE INDEX IF NOT EXISTS %s ON %s USING GIN ((%s))',
-            $connection->quoteIdentifier($indexName),
-            $connection->quoteIdentifier($table),
+            $connection->quoteSingleIdentifier($indexName),
+            $connection->quoteSingleIdentifier($table),
             $this->postgresVectorExpression($connection, $searchFields),
         ));
 
@@ -179,7 +179,7 @@ final class SearchIndexCommand
             }
             $expressions[] = sprintf(
                 'to_tsvector(\'english\', coalesce(%s::text, \'\'))',
-                $connection->quoteIdentifier($field),
+                $connection->quoteSingleIdentifier($field),
             );
         }
 

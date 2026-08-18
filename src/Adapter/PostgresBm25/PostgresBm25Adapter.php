@@ -79,7 +79,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
             'SELECT %s, %s AS _score FROM %s d%s %s LIMIT :limit OFFSET :offset',
             $this->selectList($this->connection, $search->getResolvedAdapterParameter('selectColumns')),
             $scoreExpression,
-            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')),
+            $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')),
             $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
             $this->orderBy($query, $search),
         );
@@ -92,7 +92,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
 
         $countSql = sprintf(
             'SELECT COUNT(*) FROM %s d%s',
-            $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')),
+            $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')),
             $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
         );
 
@@ -171,7 +171,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
             $sql = sprintf(
                 'SELECT %s AS value, COUNT(*) AS total FROM %s d%s GROUP BY %s ORDER BY total DESC LIMIT :maxFacetValues',
                 $column,
-                $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')),
+                $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')),
                 $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
                 $column,
             );
@@ -216,7 +216,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
                 'SELECT MIN(%s) AS min_value, MAX(%s) AS max_value FROM %s d%s',
                 $column,
                 $column,
-                $this->connection->quoteIdentifier($search->getResolvedAdapterParameter('table')),
+                $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')),
                 $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
             );
 

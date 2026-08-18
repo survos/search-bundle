@@ -164,7 +164,7 @@ final readonly class DbalParameterTranslator implements ParameterTranslatorInter
             $column = preg_replace('/^[a-z]+\./', '', $field) ?? $field;
             $expressions[] = sprintf(
                 "to_tsvector('english', coalesce(%s::text, ''))",
-                'd.' . $connection->quoteIdentifier($column),
+                'd.' . $connection->quoteSingleIdentifier($column),
             );
         }
 
