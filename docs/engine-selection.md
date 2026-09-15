@@ -3,6 +3,10 @@
 Decision: 2026-09-15. Supersedes the single-engine retirement proposal in
 [mono#53](https://github.com/survos/mono/issues/53).
 
+> **Update, later on 2026-09-15:** Elasticsearch is now the default engine, and apps that have it
+> drop Meilisearch entirely. The Policy section below is superseded for those apps. See
+> elastic-bundle's [Migrating from Meilisearch](../../elastic-bundle/docs/migrating-from-meilisearch.md).
+
 ## Policy
 
 Preserve Meilisearch, Elasticsearch, Postgres BM25, SQLite FTS5, and the other existing
