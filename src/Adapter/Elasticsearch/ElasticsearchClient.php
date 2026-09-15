@@ -46,6 +46,11 @@ final readonly class ElasticsearchClient implements ElasticsearchClientInterface
         $this->client->indices()->refresh(['index' => $index]);
     }
 
+    public function putSettings(string $index, array $settings): void
+    {
+        $this->client->indices()->putSettings(['index' => $index, 'body' => $settings]);
+    }
+
     public function ping(): bool
     {
         try {

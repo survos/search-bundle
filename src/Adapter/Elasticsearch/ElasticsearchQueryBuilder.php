@@ -32,7 +32,9 @@ final readonly class ElasticsearchQueryBuilder
         }
 
         if ($search->getResolvedAdapterParameter('highlight')) {
-            $body['highlight'] = ['encoder' => 'html', 'pre_tags' => ['<mark>'], 'post_tags' => ['</mark>'], 'fields' => array_fill_keys($search->getResolvedAdapterParameter('searchFields'), ['number_of_fragments' => 0])];
+            // searchFields may carry query-time boosts (title^3); highlight wants bare field names.
+            $highlightFields = array_values(array_unique(array_map(static fn (string $field): string => explode('^', $field, 2)[0], $search->getResolvedAdapterParameter('searchFields'))));
+            $body['highlight'] = ['encoder' => 'html', 'pre_tags' => ['<mark>'], 'post_tags' => ['</mark>'], 'fields' => array_fill_keys($highlightFields, ['number_of_fragments' => 0])];
         }
 
         if ($search->getResolvedAdapterParameter('explain')) {

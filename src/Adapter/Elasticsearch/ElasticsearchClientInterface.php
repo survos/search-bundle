@@ -33,6 +33,14 @@ interface ElasticsearchClientInterface
 
     public function refresh(string $index): void;
 
+    /**
+     * Update dynamic index settings, e.g. `['index' => ['refresh_interval' => '-1']]` while a new
+     * generation loads. A null value restores Elasticsearch's default.
+     *
+     * @param array<string, mixed> $settings
+     */
+    public function putSettings(string $index, array $settings): void;
+
     public function ping(): bool;
 
     /**
