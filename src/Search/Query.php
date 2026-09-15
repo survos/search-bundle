@@ -19,6 +19,9 @@ class Query
 {
     private string $queryString = '';
 
+    /** Browser search consumes the index projection without loading Doctrine entities. */
+    public bool $hydrateEntities = true;
+
     /** @var array<string, FilterInterface> */
     private array $activeFilters = [];
 

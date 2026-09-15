@@ -105,6 +105,7 @@ final class AutoEntitySearchPass implements CompilerPassInterface
                     ->setPublic(false)
                     ->setArgument('$entityClass', $class)
                     ->setArgument('$fieldNames', $fieldNames)
+                    ->setArgument('$adapterName', $entityAdapters[$code] ?? null)
                     // adapter: null means "the app default", resolved at runtime by
                     // AdapterProvider. It used to be baked in here as a DSN string read at
                     // compile time, which forced survos_search.default_adapter to be a literal

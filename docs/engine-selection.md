@@ -72,3 +72,10 @@ GlobalGiving's comparison tests passed on 2026-09-15: 6 tests, 20 assertions.
 Semantic modes follow a working lexical baseline. Record deployment/version/license and
 inference costs explicitly. No Meili retirement, production deployment, or automatic paid
 embedding run is implied by this evaluation.
+
+## Implemented selection and browser entry point
+
+Auto-entity searches now receive the configured `entity_adapters` override directly. For example,
+`entity_adapters: {app_tenant: meili}` overrides an ES default for tenant browsing. Lifecycle
+selection skips non-ES descriptors and continues looking for an ES search of the entity.
+See [InstantSearch](instantsearch.md) for the client-rendered lexical UI and explicit public-search allowlist.

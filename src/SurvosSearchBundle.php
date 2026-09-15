@@ -64,6 +64,16 @@ final class SurvosSearchBundle extends AbstractUxBundle
         $this->addRouteOptions($children, '');
         $children
             ->scalarNode('default_adapter')->defaultValue('default')->end()
+            ->arrayNode('public_searches')
+                ->scalarPrototype()->end()
+                ->defaultValue([])
+            ->end()
+            ->arrayNode('entity_adapters')
+                ->normalizeKeys(false)
+                ->useAttributeAsKey('code')
+                ->scalarPrototype()->end()
+                ->defaultValue([])
+            ->end()
             ->scalarNode('index_prefix')
                 ->defaultValue('%env(default::MEILI_PREFIX)%')
                 ->info('Prefix applied to every Elasticsearch index name, once, by '
@@ -102,6 +112,7 @@ final class SurvosSearchBundle extends AbstractUxBundle
         $this->registerRouteLoader($builder);
 
         $builder->setParameter('survos_search.default_adapter', $config['default_adapter']);
+        $builder->setParameter('survos_search.entity_adapters', $config['entity_adapters']);
         $builder->setParameter('survos_search.index_prefix', $config['index_prefix']);
         $builder->setParameter('survos_search.adapters', $config['adapters']);
 
@@ -118,6 +129,8 @@ final class SurvosSearchBundle extends AbstractUxBundle
         $builder->registerForAutoconfiguration(UrlFormaterInterface::class)->addTag('survos_search.url_formater');
 
         $services = $container->services()->defaults()->autowire()->autoconfigure();
+        $services->set(\Survos\SearchBundle\Http\InstantSearchGateway::class)->arg('$allowedSearches', $config['public_searches']);
+        $services->set(\Survos\SearchBundle\Controller\InstantSearchController::class)->tag('controller.service_arguments');
         $services
             ->set(FieldSearchConfigurator::class)
                 ->arg('$defaultHitsPerPage', $config['default_hits_per_page'])

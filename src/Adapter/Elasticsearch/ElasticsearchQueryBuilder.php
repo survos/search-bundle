@@ -32,7 +32,7 @@ final readonly class ElasticsearchQueryBuilder
         }
 
         if ($search->getResolvedAdapterParameter('highlight')) {
-            $body['highlight'] = ['fields' => array_fill_keys($search->getResolvedAdapterParameter('searchFields'), new \stdClass())];
+            $body['highlight'] = ['encoder' => 'html', 'pre_tags' => ['<mark>'], 'post_tags' => ['</mark>'], 'fields' => array_fill_keys($search->getResolvedAdapterParameter('searchFields'), ['number_of_fragments' => 0])];
         }
 
         if ($search->getResolvedAdapterParameter('explain')) {
@@ -40,7 +40,10 @@ final readonly class ElasticsearchQueryBuilder
         }
 
         if ($mode === 'lexical' || $queryString === '') {
-            $body['query'] = $lexical;
+            $body['query'] = $this->lexicalQuery($queryString, $search, []);
+            if ($filters !== []) {
+                $body['post_filter'] = ['bool' => ['filter' => $filters]];
+            }
             $sort = $this->sort($query, $search);
             if ($sort !== []) {
                 $body['sort'] = $sort;
@@ -66,12 +69,21 @@ final readonly class ElasticsearchQueryBuilder
         foreach ($search->getFacets() as $facet) {
             $property = $facet->getProperty();
             $field = $search->getResolvedAdapterParameter('facetFields')[$property] ?? $property;
-            $aggs[$property] = ['terms' => ['field' => $field, 'size' => $search->getResolvedAdapterParameter('maxFacetValues')]];
+            $values = ['terms' => ['field' => $field, 'size' => $search->getResolvedAdapterParameter('maxFacetValues')]];
+            $scoped = $mode === 'lexical' || $queryString === '';
+            $aggs[$property] = $scoped
+                ? ['filter' => ['bool' => ['filter' => $this->filters($query, $search, $property)]], 'aggs' => ['values' => $values]]
+                : $values;
             $component = $facet->getDisplayComponent();
-            if (is_string($component)
+            if (in_array($search->getResolvedAdapterParameter('mappings')[$property]['type'] ?? '', ['long', 'integer', 'double', 'float'], true)
+                || (is_string($component)
                 && is_subclass_of($component, \Survos\SearchBundle\Twig\Components\Facet\AbstractFacet::class)
-                && $component::usesFacetStats()) {
-                $aggs[$property . '__stats'] = ['stats' => ['field' => $field]];
+                && $component::usesFacetStats())) {
+                if ($scoped) {
+                    $aggs[$property]['aggs']['stats'] = ['stats' => ['field' => $field]];
+                } else {
+                    $aggs[$property . '__stats'] = ['stats' => ['field' => $field]];
+                }
             }
         }
         if ($aggs !== []) {
@@ -86,15 +98,19 @@ final readonly class ElasticsearchQueryBuilder
      */
     private function lexicalQuery(string $query, SearchInterface $search, array $filters): array
     {
-        $must = $query === ''
-            ? [['match_all' => new \stdClass()]]
-            : [['multi_match' => [
-                'query' => $query,
-                'fields' => $search->getResolvedAdapterParameter('searchFields'),
-                'type' => 'best_fields',
-            ]]];
-
-        return ['bool' => ['must' => $must, 'filter' => $filters]];
+        if ($query === '') {
+            return ['bool' => ['must' => [['match_all' => new \stdClass()]], 'filter' => $filters]];
+        }
+        $fields = $search->getResolvedAdapterParameter('searchFields');
+        $exact = ['query' => $query, 'fields' => $fields, 'type' => 'best_fields', 'operator' => 'and'];
+        $clauses = [
+            ['multi_match' => $exact + ['boost' => 3]],
+            ['multi_match' => $exact + ['fuzziness' => $search->getResolvedAdapterParameter('fuzziness'), 'max_expansions' => 50]],
+        ];
+        if ($search->getResolvedAdapterParameter('prefixSearch')) {
+            $clauses[] = ['multi_match' => ['query' => $query, 'fields' => $fields, 'type' => 'bool_prefix', 'operator' => 'and', 'boost' => 2]];
+        }
+        return ['bool' => ['must' => [['dis_max' => ['queries' => $clauses]]], 'filter' => $filters]];
     }
 
     /** @return list<float> */
@@ -141,11 +157,12 @@ final readonly class ElasticsearchQueryBuilder
     }
 
     /** @return list<array<string, mixed>> */
-    private function filters(Query $query, SearchInterface $search): array
+    private function filters(Query $query, SearchInterface $search, ?string $except = null): array
     {
         $filters = [];
         $facetFields = $search->getResolvedAdapterParameter('facetFields');
         foreach ($query->getActiveFilters() as $filter) {
+            if ($filter->getProperty() === $except) { continue; }
             $field = $facetFields[$filter->getProperty()] ?? $filter->getProperty();
             if ($filter instanceof TermFilter && $filter->getValues() !== []) {
                 $filters[] = ['terms' => [$field => array_values($filter->getValues())]];
@@ -167,9 +184,12 @@ final readonly class ElasticsearchQueryBuilder
     /** @return list<array<string, array{order: string}>> */
     private function sort(Query $query, SearchInterface $search): array
     {
+        $id = $search->getResolvedAdapterParameter('idField');
+        $mapping = $search->getResolvedAdapterParameter('mappings')[$id] ?? [];
+        $idSort = $mapping === [] ? null : (($mapping['type'] ?? null) === 'text' ? $id.'.keyword' : $id);
         $activeSort = $query->getActiveSort();
         if (!is_string($activeSort) || !str_contains($activeSort, ':')) {
-            return [];
+            return $idSort === null ? [] : [['_score' => 'desc'], [$idSort => ['order' => 'asc']]];
         }
         [$property, $direction] = explode(':', $activeSort, 2);
         $field = $search->getResolvedAdapterParameter('sortFields')[$property] ?? null;
@@ -178,6 +198,8 @@ final readonly class ElasticsearchQueryBuilder
             return [];
         }
 
-        return [[$field => ['order' => $direction]]];
+        $sort = [[$field => ['order' => $direction, 'missing' => '_last']]];
+        if ($idSort !== null && $idSort !== $field) { $sort[] = [$idSort => ['order' => 'asc']]; }
+        return $sort;
     }
 }

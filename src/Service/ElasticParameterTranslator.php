@@ -99,6 +99,10 @@ final readonly class ElasticParameterTranslator implements ParameterTranslatorIn
             }
         }
 
+        if ($parameters['searchFields'] === []) {
+            $parameters['searchFields'] = array_keys(array_filter($parameters['mappings'], static fn (array $mapping): bool => $mapping['type'] === 'text'));
+        }
+
         $parameters['index'] ??= strtolower($metadata->getTableName());
         $parameters['idField'] ??= $metadata->getSingleIdentifierFieldName();
         $parameters['sourceFields'] ??= $includedFields;

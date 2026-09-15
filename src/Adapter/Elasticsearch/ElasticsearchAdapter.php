@@ -43,6 +43,8 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
             'embeddingProvider' => null,
             'queryVector' => null,
             'retrievalMode' => 'lexical',
+            'fuzziness' => 'AUTO',
+            'prefixSearch' => true,
             'vectorField' => 'embedding',
             'vectorDimensions' => null,
             'vectorSimilarity' => 'cosine',
@@ -80,6 +82,8 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
         foreach (['k', 'numCandidates', 'rankConstant', 'rankWindowSize', 'maxFacetValues', 'maxResultWindow'] as $integer) {
             $resolver->setAllowedTypes($integer, 'int');
         }
+        $resolver->setAllowedTypes('fuzziness', ['string', 'int']);
+        $resolver->setAllowedTypes('prefixSearch', 'bool');
         $resolver->setAllowedTypes('highlight', 'bool');
         $resolver->setAllowedTypes('explain', 'bool');
     }
@@ -163,7 +167,7 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
         foreach ($search->getFacets() as $facet) {
             $property = $facet->getProperty();
             $values = [];
-            foreach (($response['aggregations'][$property]['buckets'] ?? []) as $bucket) {
+            foreach (($response['aggregations'][$property]['values']['buckets'] ?? $response['aggregations'][$property]['buckets'] ?? []) as $bucket) {
                 if (is_array($bucket) && isset($bucket['key'])) {
                     $values[(string) $bucket['key']] = (int) ($bucket['doc_count'] ?? 0);
                 }
@@ -174,8 +178,8 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
                 ->setValues($values)
                 ->setCheckedValues($filter instanceof TermFilter ? $filter->getValues() : []);
 
-            $rawStats = $response['aggregations'][$property . '__stats'] ?? null;
-            if (is_array($rawStats) && ($rawStats['count'] ?? 0) > 0) {
+            $rawStats = $response['aggregations'][$property]['stats'] ?? $response['aggregations'][$property . '__stats'] ?? null;
+            if (is_array($rawStats)) {
                 $stats[] = new FacetStat(
                     $property,
                     (float) $rawStats['min'],

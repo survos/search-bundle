@@ -23,7 +23,13 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
     public function __construct(
         private readonly string $entityClass,
         private readonly array $fieldNames,
+        private readonly ?string $adapterName = null,
     ) {}
+
+    public function getAdapterName(): ?string
+    {
+        return $this->adapterName;
+    }
 
     public function getIndexName(): ?string
     {

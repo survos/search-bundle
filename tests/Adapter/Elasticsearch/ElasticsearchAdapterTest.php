@@ -109,11 +109,13 @@ final class ElasticsearchAdapterTest extends TestCase
     {
         return [
             'index' => 'packages',
-            'retrievalMode' => 'lexical',
+            'retrievalMode' => 'lexical', 'fuzziness' => 'AUTO', 'prefixSearch' => true,
             'searchFields' => ['name', 'description'],
             'sourceFields' => ['name', 'description'],
             'facetFields' => [],
             'sortFields' => [],
+            'idField' => 'id',
+            'mappings' => [],
             'queryVector' => null,
             'embeddingProvider' => null,
             'vectorField' => 'embedding',

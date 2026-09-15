@@ -25,7 +25,7 @@ final class ElasticsearchQueryBuilderTest extends TestCase
 
         self::assertSame(10, $body['size']);
         self::assertSame(10, $body['from']);
-        self::assertSame('json rpc', $body['query']['bool']['must'][0]['multi_match']['query']);
+        self::assertSame('json rpc', $body['query']['bool']['must'][0]['dis_max']['queries'][0]['multi_match']['query']);
         self::assertArrayNotHasKey('retriever', $body);
     }
 
@@ -53,7 +53,7 @@ final class ElasticsearchQueryBuilderTest extends TestCase
         ]));
 
         $retrievers = $body['retriever']['rrf']['retrievers'];
-        self::assertSame('message between applications', $retrievers[0]['standard']['query']['bool']['must'][0]['multi_match']['query']);
+        self::assertSame('message between applications', $retrievers[0]['standard']['query']['bool']['must'][0]['dis_max']['queries'][0]['multi_match']['query']);
         self::assertSame([1.0, 0.0], $retrievers[1]['knn']['query_vector']);
         self::assertSame(60, $body['retriever']['rrf']['rank_constant']);
     }
@@ -63,10 +63,14 @@ final class ElasticsearchQueryBuilderTest extends TestCase
     {
         $parameters = $overrides + [
             'retrievalMode' => 'lexical',
+            'fuzziness' => 'AUTO',
+            'prefixSearch' => true,
             'searchFields' => ['name', 'description'],
             'sourceFields' => [],
             'facetFields' => [],
             'sortFields' => [],
+            'idField' => 'id',
+            'mappings' => [],
             'queryVector' => null,
             'embeddingProvider' => null,
             'vectorField' => 'embedding',

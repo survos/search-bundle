@@ -186,3 +186,8 @@ Do not add the search code to `folio-bundle`. Folio should consume this bundle b
 ## Credits
 
 The UX layer is derived from and inspired by [Mezcalito UX Search](https://github.com/Mezcalito/ux-search), released under the MIT license. SearchBundle retains attribution in the imported source and now maintains the integrated implementation under the `Survos\SearchBundle` namespace.
+
+## Client-rendered InstantSearch
+
+See [InstantSearch with named searches](docs/instantsearch.md) for the optional browser UI,
+public HTTP allowlist, supported lexical features, and twig-browser/FOS route integration.

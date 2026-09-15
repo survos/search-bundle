@@ -25,10 +25,20 @@
         "webpackMode": "eager",
         "fetch": "eager",
         "enabled": true
+      },
+      "instantsearch": {
+        "main": "src/controllers/instantsearch_controller.js",
+        "fetch": "lazy",
+        "enabled": false
       }
     },
     "importmap": {
-      "@hotwired/stimulus": "^3.2.0"
+      "@hotwired/stimulus": "^3.2.0",
+      "instantsearch.js": "^4.0",
+      "instantsearch.js/es/widgets": "^4.0",
+      "@andypf/json-viewer": "^2.8.0",
+      "@tacman1123/twig-browser": "^1.0",
+      "@tacman1123/twig-browser/adapters/symfony": "^1.0"
     },
     "autoimport": {}
   },

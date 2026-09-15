@@ -33,6 +33,10 @@ final readonly class HitEntityHydrator implements EventSubscriberInterface
 
     public function hydrate(PostSearchEvent $event): void
     {
+        if (!$event->getQuery()->hydrateEntities) {
+            return;
+        }
+
         $resultSet = $event->getResultSet();
         $hits = $resultSet->getHits();
         if ($hits === []) {
