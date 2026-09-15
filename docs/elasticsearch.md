@@ -1,6 +1,9 @@
 # Elasticsearch adapter
 
-Added 2026-08-15. Lexical retrieval only — see [Vectors](#vectors-not-yet) below.
+Added 2026-08-15. For the current architecture and rollout decision, read
+[Engine selection and Elasticsearch evaluation](engine-selection.md). The implementation
+has evolved since the notes below: verify indexing commands and vector support against
+the installed engine bundles before following the historical examples.
 
 ## Configuration
 
@@ -22,10 +25,10 @@ ELASTICSEARCH_DSN=elasticsearch://127.0.0.1:9200
 `elasticsearch+https://`, and `elastic://`. Auth comes off the DSN — either
 `elasticsearch+https://user:pass@host` or `?api_key=…`.
 
-**Engine choice is per-app, not per-search.** `AutoEntitySearch` picks its configuration
-branch by inspecting the *default* adapter's DSN, so an app's auto-searches all run on one
-engine. Flipping `SEARCH_ADAPTER` between `pg` and `es` is how you compare backends on the
-same data; you cannot serve both simultaneously from auto-searches.
+**The app default is a fallback; named searches may select another adapter.** Multiple
+engines for distinct datasets are supported by the architecture. Auto-entity override
+wiring still needs verification; see the current decision document for the identified gap.
+SearchBench is the principal integration testcase before the later Folio work.
 
 ## What gets derived automatically
 
