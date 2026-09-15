@@ -45,7 +45,8 @@ final readonly class ElasticsearchFactory implements AdapterFactoryInterface
         $builder = ClientBuilder::create()->setHosts([$host]);
 
         if ($this->logger !== null) {
-            $builder->setLogger($this->logger);
+            // The transport logs request headers verbatim; never let the API key through.
+            $builder->setLogger(new RedactingLogger($this->logger));
         }
 
         parse_str($parts['query'] ?? '', $query);
