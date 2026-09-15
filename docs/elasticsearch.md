@@ -23,7 +23,8 @@ ELASTICSEARCH_DSN=elasticsearch://127.0.0.1:9200
 
 `Adapter/Elasticsearch/ElasticsearchFactory` accepts `elasticsearch://`,
 `elasticsearch+https://`, and `elastic://`. Auth comes off the DSN — either
-`elasticsearch+https://user:pass@host` or `?api_key=…`.
+`elasticsearch+https://user:pass@host` or `?api_key=…`. A node behind a private CA takes `&ca=/path/to/ca.crt`;
+the factory refuses an unreadable path rather than falling back to an unverified connection.
 
 **The app default is a fallback; named searches may select another adapter.** Multiple
 engines for distinct datasets are supported by the architecture. Auto-entity override

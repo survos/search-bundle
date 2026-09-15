@@ -49,6 +49,13 @@ final readonly class ElasticsearchFactory implements AdapterFactoryInterface
         }
 
         parse_str($parts['query'] ?? '', $query);
+        // A node with a private CA (e.g. fsn1's): ?ca=/path/to/ca.crt. Never disable verification instead.
+        if (is_string($query['ca'] ?? null) && $query['ca'] !== '') {
+            if (!is_readable($query['ca'])) {
+                throw new \InvalidArgumentException(sprintf('Elasticsearch CA bundle "%s" is not readable.', $query['ca']));
+            }
+            $builder->setCABundle($query['ca']);
+        }
         if (is_string($query['api_key'] ?? null) && $query['api_key'] !== '') {
             $builder->setApiKey($query['api_key']);
         } elseif (isset($parts['user'])) {
