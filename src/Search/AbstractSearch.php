@@ -123,9 +123,9 @@ abstract class AbstractSearch implements SearchInterface, ResetInterface
     /**
      * @param array<string, mixed> $props
      */
-    public function addFacet(string $property, string $label, ?string $displayComponent = null, array $props = []): static
+    public function addFacet(string $property, string $label, ?string $displayComponent = null, array $props = [], ?string $group = null): static
     {
-        $this->facets[] = (new Facet($property, $label, $displayComponent, $props));
+        $this->facets[] = (new Facet($property, $label, $displayComponent, $props, $group));
 
         return $this;
     }

@@ -52,7 +52,7 @@ interface SearchInterface
     /**
      * @param array<string, mixed> $props
      */
-    public function addFacet(string $property, string $label, ?string $displayComponent = null, array $props = []): static;
+    public function addFacet(string $property, string $label, ?string $displayComponent = null, array $props = [], ?string $group = null): static;
 
     /**
      * @return Facet[]

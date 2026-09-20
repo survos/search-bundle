@@ -23,7 +23,14 @@ readonly class Facet
         private string $label,
         private ?string $displayComponent = null,
         private array $props = [],
+        /** Sidebar block this facet belongs to (the DTO field's #[Field(group:)]); null renders it on its own. */
+        private ?string $group = null,
     ) {
+    }
+
+    public function getGroup(): ?string
+    {
+        return $this->group;
     }
 
     public function getProperty(): string

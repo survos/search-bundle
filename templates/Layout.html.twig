@@ -55,8 +55,34 @@
                 </div>
 
                 <div class="offcanvas-body">
-                    {% for facet in search.facets %}
+                    {# Facets carrying a #[Field(group:)] collapse into one block per group (Merit,
+                       Admin, ...) so eight sliders stop repeating the group's name; ungrouped ones
+                       render as before, above the groups. A group named Admin starts collapsed --
+                       stage and other plumbing facets are not what a visitor came for. #}
+                    {% for facet in search.facets|filter(f => f.group is null) %}
                         <twig:Survos:Search:Facet :property="facet.property" />
+                    {% endfor %}
+
+                    {% set facetGroups = {} %}
+                    {% for facet in search.facets|filter(f => f.group is not null) %}
+                        {% set facetGroups = facetGroups|merge({ (facet.group): (facetGroups[facet.group]|default([]))|merge([facet]) }) %}
+                    {% endfor %}
+                    {% for group, groupFacets in facetGroups %}
+                        {% set groupId = 'ux-search-facet-group-' ~ group|lower|replace({' ': '-', '&': 'and', '/': '-'}) %}
+                        {% set startsOpen = group|lower != 'admin' %}
+                        <div class="ux-search-facet ux-search-facet-group">
+                            <button class="ux-search-facet__title d-flex align-items-center justify-content-between gap-2 w-100 border-0 bg-transparent text-start"
+                                    type="button" data-bs-toggle="collapse" data-bs-target="#{{ groupId }}"
+                                    aria-expanded="{{ startsOpen ? 'true' : 'false' }}" aria-controls="{{ groupId }}">
+                                <span class="ux-search-facet__title-text">{{ group }}</span>
+                                <span class="ux-search-refinement-list__count">{{ groupFacets|length }}</span>
+                            </button>
+                            <div class="collapse{{ startsOpen ? ' show' : '' }} ux-search-facet-group__body" id="{{ groupId }}">
+                                {% for facet in groupFacets %}
+                                    <twig:Survos:Search:Facet :property="facet.property" />
+                                {% endfor %}
+                            </div>
+                        </div>
                     {% endfor %}
                 </div>
 
