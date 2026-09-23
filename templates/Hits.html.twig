@@ -3,17 +3,34 @@
         class: 'ux-search-hits'
     }) }}>
         {% if results.hits|length > 0 %}
-            <div class="ux-search-hits__list vstack gap-3">
-                {% for hit in results.hits %}
-                    {% block hit %}
-                        <div class="ux-search-hits__item card">
-                            <div class="card-body p-2" style="max-width: 100%; overflow: auto;">
-                                <pre class="mb-0" style="font-family: monospace">{{ hit.data|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+            {# A search that implements HitTemplateSearchInterface names its own hit card (e.g.
+               folio-bundle's FolioRowSearch); render that. Without one, show the raw hit, which is
+               what an app sees while it has not written a card yet. Apps used to override this
+               whole template just to make that call (zm, fotostory, ink). #}
+            {% set hitTemplate = survos_hit_template() %}
+            {% if hitTemplate %}
+                <div class="ux-search-hits__list row row-cards">
+                    {% for hit in results.hits %}
+                        {% block templated_hit %}
+                            <div class="col-12 col-sm-6 col-xl-4">
+                                {{ include(hitTemplate, {hit: hit.data}) }}
                             </div>
-                        </div>
-                    {% endblock %}
-                {% endfor %}
-            </div>
+                        {% endblock %}
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="ux-search-hits__list vstack gap-3">
+                    {% for hit in results.hits %}
+                        {% block hit %}
+                            <div class="ux-search-hits__item card">
+                                <div class="card-body p-2" style="max-width: 100%; overflow: auto;">
+                                    <pre class="mb-0" style="font-family: monospace">{{ hit.data|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+                                </div>
+                            </div>
+                        {% endblock %}
+                    {% endfor %}
+                </div>
+            {% endif %}
         {% else %}
             {% block noResult %}
                 <div class="ux-search-hits__no-result empty">
