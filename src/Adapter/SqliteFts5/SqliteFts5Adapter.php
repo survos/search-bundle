@@ -116,11 +116,10 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         $score = $usesFts ? sprintf('bm25(%s)', $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('ftsTable'))) : '0';
 
         $sql = sprintf(
-            'SELECT %s, %s AS _score FROM %s%s%s %s LIMIT :limit OFFSET :offset',
+            'SELECT %s, %s AS _score FROM %s%s %s LIMIT :limit OFFSET :offset',
             $this->selectList($this->connection, $search->getResolvedAdapterParameter('selectColumns')),
             $score,
-            $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
-            $this->joinClause($search, $usesFts),
+            $this->fromClause($search, $usesFts),
             $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
             $orderBy,
         );
@@ -132,9 +131,8 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         );
 
         $countSql = sprintf(
-            'SELECT COUNT(*) FROM %s%s%s',
-            $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
-            $this->joinClause($search, $usesFts),
+            'SELECT COUNT(*) FROM %s%s',
+            $this->fromClause($search, $usesFts),
             $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
         );
 
@@ -331,6 +329,31 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
     private function usesFts(Query $query): bool
     {
         return Fts5MatchQuery::build($query->getQueryString()) !== '';
+    }
+
+    /**
+     * FROM for the hit and count queries: the FTS table first, then the rows it matched.
+     *
+     * `CROSS JOIN` is how SQLite is told the join order; it never reorders one. Without it, a
+     * WHERE on the row table (a core scope, a filter) lets the planner drive from that index and
+     * probe the FTS table once per row: on a 966k-row newspaper folio a count for "snap bean" took
+     * 45 s this way and 0.00 s FTS-first, and inkstory.org's search 502'd (2026-09-25). A MATCH is
+     * always the most selective thing in the query, so it should always be the outer loop — the
+     * same reasoning the facet queries already follow with {@see ftsCtePrefix()}.
+     */
+    private function fromClause(SearchInterface $search, bool $usesFts): string
+    {
+        $table = $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d';
+        if (!$usesFts) {
+            return $table;
+        }
+
+        return sprintf(
+            '%s f CROSS JOIN %s ON %s',
+            $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('ftsTable')),
+            $table,
+            $search->getResolvedAdapterParameter('joinExpression'),
+        );
     }
 
     private function joinClause(SearchInterface $search, bool $usesFts, ?string $ftsSource = null): string
