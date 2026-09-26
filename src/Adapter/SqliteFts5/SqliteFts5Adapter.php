@@ -40,6 +40,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             'where' => null,
             'params' => [],
             'maxFacetValues' => 100,
+            'textFallbackColumns' => [],
             'facetCountTable' => null,
             'facetValueTable' => null,
             'liveFacets' => true,
@@ -47,7 +48,11 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
 
         $resolver->setRequired(['table', 'ftsTable']);
         $resolver->setAllowedTypes('table', 'string');
-        $resolver->setAllowedTypes('ftsTable', 'string');
+        // Null for a search whose FTS index was skipped or is missing: text queries then use
+        // textFallbackColumns (LIKE) instead of MATCH. Required all the same, so leaving it out
+        // stays a configuration error rather than a silent downgrade.
+        $resolver->setAllowedTypes('ftsTable', ['null', 'string']);
+        $resolver->setAllowedTypes('textFallbackColumns', 'string[]');
         $resolver->setAllowedTypes('idColumn', 'string');
         $resolver->setAllowedTypes('selectColumns', 'string[]');
         $resolver->setAllowedTypes('searchFields', 'string[]');
@@ -114,7 +119,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         $params['limit'] = $limit;
         $params['offset'] = $offset;
 
-        $usesFts = $this->usesFts($query);
+        $usesFts = $this->usesFts($query, $search);
         $score = $usesFts ? sprintf('bm25(%s)', $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('ftsTable'))) : '0';
 
         $sql = sprintf(
@@ -157,6 +162,10 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             $where[] = $search->getResolvedAdapterParameter('where');
         }
 
+        if ($search->getResolvedAdapterParameter('ftsTable') === null) {
+            return [...$where, ...$this->fallbackWhere($query, $search, $params)];
+        }
+
         $ftsQuery = Fts5MatchQuery::build($query->getQueryString());
         if ($ftsQuery !== '') {
             $params['ftsQuery'] = $ftsQuery;
@@ -183,7 +192,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
     {
         // With a text query, order by relevance (FTS5 bm25() ranks lower = better).
         // Browse (no query) uses the column sort.
-        if ($this->usesFts($query)) {
+        if ($this->usesFts($query, $search)) {
             return 'ORDER BY _score ASC';
         }
 
@@ -211,7 +220,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         // present — an absent one throws "Facet distribution ... is not found" — and a checked box
         // still renders as checked. Only the numbers are missing, and they are missing rather than
         // wrong, since the precomputed per-core totals do not describe this query's matches.
-        $countsOnlyFromFilters = !$search->getResolvedAdapterParameter('liveFacets') && $this->usesFts($query);
+        $countsOnlyFromFilters = !$search->getResolvedAdapterParameter('liveFacets') && $this->usesFts($query, $search);
         $distributions = [];
         foreach ($search->getFacets() as $facet) {
             $filter = $query->getActiveFilter($facet->getProperty());
@@ -233,7 +242,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
 
             $countTable = $search->getResolvedAdapterParameter('facetCountTable');
             $valueTable = $search->getResolvedAdapterParameter('facetValueTable');
-            $coreScope = $this->usesFts($query) ? null : $this->soleCoreScope($query, $facet->getProperty());
+            $coreScope = $this->usesFts($query, $search) ? null : $this->soleCoreScope($query, $facet->getProperty());
             if (is_string($countTable) && $coreScope !== null) {
                 // Precomputed fast path: the only constraint is the structural core scope, so read the
                 // per-core aggregate directly (core='' when no core is selected) — no JOIN, no EXISTS.
@@ -244,7 +253,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
                 $params['facetField'] = $facet->getProperty();
                 $params['facetCore'] = $coreScope;
             } elseif (is_string($valueTable)) {
-                $usesFts = $this->usesFts($query);
+                $usesFts = $this->usesFts($query, $search);
                 $params['facetField'] = $facet->getProperty();
                 $where[] = 'fv.field = :facetField';
                 $sql = sprintf(
@@ -256,7 +265,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
                     ' WHERE ' . implode(' AND ', $where),
                 );
             } else {
-                $usesFts = $this->usesFts($query);
+                $usesFts = $this->usesFts($query, $search);
                 $sql = sprintf(
                     '%sSELECT %s AS value, COUNT(*) AS total FROM %s%s%s GROUP BY %s ORDER BY total DESC LIMIT :maxFacetValues',
                     $this->ftsCtePrefix($search, $usesFts),
@@ -292,7 +301,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         // Same gate as facetDistributions(): each stat is a MIN/MAX over the matching rows, which is
         // the aggregation being avoided. Callers already handle a facet with no stat — the loop
         // below skips any facet whose column has no numeric range.
-        if (!$search->getResolvedAdapterParameter('liveFacets') && $this->usesFts($query)) {
+        if (!$search->getResolvedAdapterParameter('liveFacets') && $this->usesFts($query, $search)) {
             return [];
         }
 
@@ -311,7 +320,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             $where = $this->baseWhere($query, $search, $params, ftsInWhere: false);
             $this->applyFilters($query, $search, $where, $params, $facet->getProperty());
 
-            $usesFts = $this->usesFts($query);
+            $usesFts = $this->usesFts($query, $search);
             $sql = sprintf(
                 '%sSELECT MIN(%s) AS min_value, MAX(%s) AS max_value FROM %s%s%s',
                 $this->ftsCtePrefix($search, $usesFts),
@@ -349,9 +358,45 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
     }
 
 
-    private function usesFts(Query $query): bool
+    /**
+     * Whether this query runs through the FTS table. A search configured without one (ftsTable
+     * null: a folio whose index was skipped or never finished building) never does; its text
+     * query is answered by {@see fallbackWhere()} instead.
+     */
+    private function usesFts(Query $query, SearchInterface $search): bool
     {
-        return Fts5MatchQuery::build($query->getQueryString()) !== '';
+        return $search->getResolvedAdapterParameter('ftsTable') !== null
+            && Fts5MatchQuery::build($query->getQueryString()) !== '';
+    }
+
+    /**
+     * A text query against a search with no FTS table: every term must appear (LIKE, case-folded
+     * for ASCII as SQLite does) in one of the configured textFallbackColumns. With none configured
+     * it matches nothing — reporting no results is honest, returning every row unfiltered is not.
+     *
+     * @param array<string, mixed> $params
+     * @return list<string>
+     */
+    private function fallbackWhere(Query $query, SearchInterface $search, array &$params): array
+    {
+        $terms = array_slice(preg_split('/\s+/u', trim((string) $query->getQueryString()), -1, PREG_SPLIT_NO_EMPTY) ?: [], 0, 8);
+        if ($terms === []) {
+            return [];
+        }
+        $columns = $search->getResolvedAdapterParameter('textFallbackColumns');
+        if ($columns === []) {
+            return ['0 = 1'];
+        }
+        $where = [];
+        foreach ($terms as $i => $term) {
+            $params['textTerm' . $i] = '%' . addcslashes(trim($term, '"'), '%_\\') . '%';
+            $where[] = '(' . implode(' OR ', array_map(
+                static fn (string $column): string => sprintf("%s LIKE :textTerm%d ESCAPE '\\'", $column, $i),
+                $columns,
+            )) . ')';
+        }
+
+        return $where;
     }
 
     /**

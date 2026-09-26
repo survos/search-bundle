@@ -82,4 +82,45 @@ final class SqliteFts5AdapterJoinOrderTest extends TestCase
             self::assertStringContainsString('VIRTUAL TABLE', $plan[0]['detail'], 'the FTS table must be the outer loop: ' . json_encode($plan));
         }
     }
+
+    /** @param array<string, mixed> $parameters */
+    private function searchWithout(array $parameters, string $text): \Survos\SearchBundle\Search\ResultSet\ResultSet
+    {
+        $search = new class extends AbstractSearch {
+            public function build(array $options = []): void {}
+        };
+        $search->setAdapterParameters(['table' => 'item', 'selectColumns' => ['d.id', 'd.title']] + $parameters);
+        $adapter = new SqliteFts5Adapter($this->connection);
+        $resolver = new OptionsResolver();
+        $adapter->configureParameters($resolver);
+        $search->setResolvedAdapterParameters($resolver->resolve($search->getAdapterParameters()));
+        $query = $search->createQuery();
+        $query->setQueryString($text);
+
+        return $adapter->search($query, $search);
+    }
+
+    /** A folio whose FTS index is missing (skipped, or a build that died) still answers text queries. */
+    public function testWithoutAnFtsTableATextQueryFallsBackToTheConfiguredColumns(): void
+    {
+        $this->connection->executeStatement('DROP TABLE item_fts');
+        $this->statements = [];
+
+        $result = $this->searchWithout(['ftsTable' => null, 'textFallbackColumns' => ['d.title']], 'SNAP bean');
+
+        self::assertSame(2, $result->getTotalResults());
+        self::assertEqualsCanonicalizing(['r0', 'r2'], array_map(fn ($h) => $h->getData()['id'], $result->getHits()));
+        foreach ($this->statements as ['sql' => $sql]) {
+            self::assertStringNotContainsString('item_fts', $sql);
+        }
+    }
+
+    /** With nowhere to look, say "nothing matched" — never return every row unfiltered. */
+    public function testWithoutAnFtsTableOrFallbackATextQueryMatchesNothing(): void
+    {
+        $this->connection->executeStatement('DROP TABLE item_fts');
+
+        self::assertSame(0, $this->searchWithout(['ftsTable' => null], 'snap')->getTotalResults());
+        self::assertSame(4, $this->searchWithout(['ftsTable' => null], '')->getTotalResults());
+    }
 }
