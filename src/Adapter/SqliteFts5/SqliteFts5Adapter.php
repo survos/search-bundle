@@ -42,6 +42,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             'maxFacetValues' => 100,
             'facetCountTable' => null,
             'facetValueTable' => null,
+            'liveFacets' => true,
         ]);
 
         $resolver->setRequired(['table', 'ftsTable']);
@@ -58,6 +59,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         $resolver->setAllowedTypes('maxFacetValues', 'int');
         $resolver->setAllowedTypes('facetCountTable', ['null', 'string']);
         $resolver->setAllowedTypes('facetValueTable', ['null', 'string']);
+        $resolver->setAllowedTypes('liveFacets', 'bool');
     }
 
     public function search(Query $query, SearchInterface $search): ResultSet
@@ -204,10 +206,24 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
      */
     private function facetDistributions(Query $query, SearchInterface $search): array
     {
+        // A table too large to facet live (liveFacets=false) still gets a distribution per facet,
+        // holding the active filter's values and no counts: every facet the template asked for is
+        // present — an absent one throws "Facet distribution ... is not found" — and a checked box
+        // still renders as checked. Only the numbers are missing, and they are missing rather than
+        // wrong, since the precomputed per-core totals do not describe this query's matches.
+        $countsOnlyFromFilters = !$search->getResolvedAdapterParameter('liveFacets') && $this->usesFts($query);
         $distributions = [];
         foreach ($search->getFacets() as $facet) {
             $filter = $query->getActiveFilter($facet->getProperty());
             $checkedValues = $filter instanceof TermFilter ? $filter->getValues() : [];
+            if ($countsOnlyFromFilters) {
+                $distributions[$facet->getProperty()] = (new FacetTermDistribution())
+                    ->setProperty($facet->getProperty())
+                    ->setValues([])
+                    ->setCheckedValues($checkedValues);
+
+                continue;
+            }
             $column = $this->columnFor($search, 'facetColumns', $facet->getProperty());
 
             $params = $this->baseParams($search);
@@ -273,6 +289,13 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
      */
     private function facetStats(Query $query, SearchInterface $search): array
     {
+        // Same gate as facetDistributions(): each stat is a MIN/MAX over the matching rows, which is
+        // the aggregation being avoided. Callers already handle a facet with no stat — the loop
+        // below skips any facet whose column has no numeric range.
+        if (!$search->getResolvedAdapterParameter('liveFacets') && $this->usesFts($query)) {
+            return [];
+        }
+
         $stats = [];
         foreach ($search->getFacets() as $facet) {
             $component = $facet->getDisplayComponent();
