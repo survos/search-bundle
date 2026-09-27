@@ -48,7 +48,12 @@ trait DbalAdapterTrait
         // captures which facets are configured. Hashing it (rather than getIndexName(),
         // which is a class-level literal shared by every folio search regardless of
         // dataset) means two different datasets/cores can never collide in the cache.
-        $dataSource = serialize($search->getResolvedAdapterParameters());
+        // A closure (textMatcher) cannot be serialized and says nothing the rest does not: it is
+        // built from the same folio the other parameters already name.
+        $dataSource = serialize(array_map(
+            static fn (mixed $value): mixed => $value instanceof \Closure ? 'closure' : $value,
+            $search->getResolvedAdapterParameters(),
+        ));
 
         $key = sprintf(
             'survos_search_facet.%s.%s.%s.%s',

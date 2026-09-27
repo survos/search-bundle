@@ -26,6 +26,8 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
     public function __construct(
         private Connection $connection,
         private ?CacheInterface $facetCache = null,
+        /** Ids from textMatcher for the search in flight, so hits, count and every facet share one call. */
+        private \ArrayObject $textMatches = new \ArrayObject(),
     ) {}
 
     public function configureParameters(OptionsResolver $resolver): void
@@ -44,6 +46,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             'facetCountTable' => null,
             'facetValueTable' => null,
             'liveFacets' => true,
+            'textMatcher' => null,
         ]);
 
         $resolver->setRequired(['table', 'ftsTable']);
@@ -65,10 +68,15 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         $resolver->setAllowedTypes('facetCountTable', ['null', 'string']);
         $resolver->setAllowedTypes('facetValueTable', ['null', 'string']);
         $resolver->setAllowedTypes('liveFacets', 'bool');
+        // For a search with no FTS table whose text lives in another engine: called with the query
+        // string, returns the matching idColumn values best first, or null when that engine cannot
+        // answer (down, or this data not indexed there yet) — then textFallbackColumns apply.
+        $resolver->setAllowedTypes('textMatcher', ['null', 'callable']);
     }
 
     public function search(Query $query, SearchInterface $search): ResultSet
     {
+        $this->textMatches->exchangeArray([]);
         try {
             return $this->doSearch($query, $search);
         } catch (SyntaxErrorException $e) {
@@ -120,13 +128,21 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         $params['offset'] = $offset;
 
         $usesFts = $this->usesFts($query, $search);
-        $score = $usesFts ? sprintf('bm25(%s)', $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('ftsTable'))) : '0';
+        $matched = $this->matchedIds($query, $search) !== null;
+        $score = match (true) {
+            $matched => 'f.rank',
+            $usesFts => sprintf('bm25(%s)', $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('ftsTable'))),
+            default => '0',
+        };
+        // Matched ids come in as a CTE, which the hit and count queries need as much as the facets.
+        $prefix = $matched ? $this->ftsCtePrefix($query, $search, true) : '';
 
         $sql = sprintf(
-            'SELECT %s, %s AS _score FROM %s%s %s LIMIT :limit OFFSET :offset',
+            '%sSELECT %s, %s AS _score FROM %s%s %s LIMIT :limit OFFSET :offset',
+            $prefix,
             $this->selectList($this->connection, $search->getResolvedAdapterParameter('selectColumns')),
             $score,
-            $this->fromClause($search, $usesFts),
+            $this->fromClause($query, $search, $usesFts),
             $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
             $orderBy,
         );
@@ -138,8 +154,9 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         );
 
         $countSql = sprintf(
-            'SELECT COUNT(*) FROM %s%s',
-            $this->fromClause($search, $usesFts),
+            '%sSELECT COUNT(*) FROM %s%s',
+            $prefix,
+            $this->fromClause($query, $search, $usesFts),
             $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
         );
 
@@ -163,6 +180,13 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         }
 
         if ($search->getResolvedAdapterParameter('ftsTable') === null) {
+            $ids = $this->matchedIds($query, $search);
+            if ($ids !== null) {
+                $params['textMatchIds'] = json_encode($ids, JSON_THROW_ON_ERROR);
+
+                return $where;
+            }
+
             return [...$where, ...$this->fallbackWhere($query, $search, $params)];
         }
 
@@ -220,7 +244,10 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         // present — an absent one throws "Facet distribution ... is not found" — and a checked box
         // still renders as checked. Only the numbers are missing, and they are missing rather than
         // wrong, since the precomputed per-core totals do not describe this query's matches.
-        $countsOnlyFromFilters = !$search->getResolvedAdapterParameter('liveFacets') && $this->usesFts($query, $search);
+        // Matched ids are exempt: they are capped by whoever produced them, so the aggregation is
+        // over a bounded set however large the table.
+        $countsOnlyFromFilters = !$search->getResolvedAdapterParameter('liveFacets') && $this->usesFts($query, $search)
+            && $this->matchedIds($query, $search) === null;
         $distributions = [];
         foreach ($search->getFacets() as $facet) {
             $filter = $query->getActiveFilter($facet->getProperty());
@@ -258,20 +285,20 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
                 $where[] = 'fv.field = :facetField';
                 $sql = sprintf(
                     '%sSELECT fv.value AS value, COUNT(*) AS total FROM %s fv JOIN %s ON d.rowid = fv.item_rowid%s%s GROUP BY fv.value ORDER BY total DESC LIMIT :maxFacetValues',
-                    $this->ftsCtePrefix($search, $usesFts),
+                    $this->ftsCtePrefix($query, $search, $usesFts),
                     $this->connection->quoteSingleIdentifier($valueTable),
                     $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
-                    $this->joinClause($search, $usesFts, '__fts'),
+                    $this->joinClause($query, $search, $usesFts, '__fts'),
                     ' WHERE ' . implode(' AND ', $where),
                 );
             } else {
                 $usesFts = $this->usesFts($query, $search);
                 $sql = sprintf(
                     '%sSELECT %s AS value, COUNT(*) AS total FROM %s%s%s GROUP BY %s ORDER BY total DESC LIMIT :maxFacetValues',
-                    $this->ftsCtePrefix($search, $usesFts),
+                    $this->ftsCtePrefix($query, $search, $usesFts),
                     $column,
                     $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
-                    $this->joinClause($search, $usesFts, '__fts'),
+                    $this->joinClause($query, $search, $usesFts, '__fts'),
                     $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
                     $column,
                 );
@@ -301,7 +328,8 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         // Same gate as facetDistributions(): each stat is a MIN/MAX over the matching rows, which is
         // the aggregation being avoided. Callers already handle a facet with no stat — the loop
         // below skips any facet whose column has no numeric range.
-        if (!$search->getResolvedAdapterParameter('liveFacets') && $this->usesFts($query, $search)) {
+        if (!$search->getResolvedAdapterParameter('liveFacets') && $this->usesFts($query, $search)
+            && $this->matchedIds($query, $search) === null) {
             return [];
         }
 
@@ -323,11 +351,11 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             $usesFts = $this->usesFts($query, $search);
             $sql = sprintf(
                 '%sSELECT MIN(%s) AS min_value, MAX(%s) AS max_value FROM %s%s%s',
-                $this->ftsCtePrefix($search, $usesFts),
+                $this->ftsCtePrefix($query, $search, $usesFts),
                 $column,
                 $column,
                 $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
-                $this->joinClause($search, $usesFts, '__fts'),
+                $this->joinClause($query, $search, $usesFts, '__fts'),
                 $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
             );
             $row = $this->connection->executeQuery($sql, $params)->fetchAssociative();
@@ -365,8 +393,37 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
      */
     private function usesFts(Query $query, SearchInterface $search): bool
     {
-        return $search->getResolvedAdapterParameter('ftsTable') !== null
-            && Fts5MatchQuery::build($query->getQueryString()) !== '';
+        if ($search->getResolvedAdapterParameter('ftsTable') === null) {
+            return $this->matchedIds($query, $search) !== null;
+        }
+
+        return Fts5MatchQuery::build($query->getQueryString()) !== '';
+    }
+
+    /**
+     * The textMatcher's answer for this query — ids best first — or null when there is no text
+     * query, no matcher, or the matcher could not answer. Asked once per search: every facet
+     * re-derives its WHERE, and a round trip to another engine per facet would be the whole cost.
+     *
+     * The ids play the part of an FTS match: they become the `__fts` CTE (rowid, rank), so the
+     * FTS-first join order, the facet aggregations and relevance order all apply unchanged.
+     *
+     * @return list<string|int>|null
+     */
+    private function matchedIds(Query $query, SearchInterface $search): ?array
+    {
+        $matcher = $search->getResolvedAdapterParameter('textMatcher');
+        $text = trim((string) $query->getQueryString());
+        if ($matcher === null || $text === '' || $search->getResolvedAdapterParameter('ftsTable') !== null) {
+            return null;
+        }
+        $key = spl_object_id($search) . "\0" . $text;
+        if (!$this->textMatches->offsetExists($key)) {
+            $ids = $matcher($text);
+            $this->textMatches[$key] = is_array($ids) ? array_values($ids) : null;
+        }
+
+        return $this->textMatches[$key];
     }
 
     /**
@@ -409,11 +466,14 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
      * always the most selective thing in the query, so it should always be the outer loop — the
      * same reasoning the facet queries already follow with {@see ftsCtePrefix()}.
      */
-    private function fromClause(SearchInterface $search, bool $usesFts): string
+    private function fromClause(Query $query, SearchInterface $search, bool $usesFts): string
     {
         $table = $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d';
         if (!$usesFts) {
             return $table;
+        }
+        if ($this->matchedIds($query, $search) !== null) {
+            return sprintf('__fts f CROSS JOIN %s ON f.rowid = d.rowid', $table);
         }
 
         return sprintf(
@@ -424,10 +484,13 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         );
     }
 
-    private function joinClause(SearchInterface $search, bool $usesFts, ?string $ftsSource = null): string
+    private function joinClause(Query $query, SearchInterface $search, bool $usesFts, ?string $ftsSource = null): string
     {
         if (!$usesFts) {
             return '';
+        }
+        if ($this->matchedIds($query, $search) !== null) {
+            return ' JOIN __fts f ON f.rowid = d.rowid';
         }
 
         // The CTE in ftsCtePrefix() is aliased back to `f`, so the configured
@@ -447,10 +510,18 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
      * the broad facet(field) index and probes the FTS virtual table per row, which is
      * orders of magnitude slower (measured ~30x on cleveland.folio).
      */
-    private function ftsCtePrefix(SearchInterface $search, bool $usesFts): string
+    private function ftsCtePrefix(Query $query, SearchInterface $search, bool $usesFts): string
     {
         if (!$usesFts) {
             return '';
+        }
+        if ($this->matchedIds($query, $search) !== null) {
+            // json_each's key is the array position, so rank ascending is the matcher's order.
+            return sprintf(
+                'WITH __fts AS MATERIALIZED (SELECT m0.rowid AS rowid, j.key AS rank FROM json_each(:textMatchIds) j CROSS JOIN %s m0 ON m0.%s = j.value) ',
+                $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')),
+                $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('idColumn')),
+            );
         }
 
         $fts = $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('ftsTable'));

@@ -123,4 +123,37 @@ final class SqliteFts5AdapterJoinOrderTest extends TestCase
         self::assertSame(0, $this->searchWithout(['ftsTable' => null], 'snap')->getTotalResults());
         self::assertSame(4, $this->searchWithout(['ftsTable' => null], '')->getTotalResults());
     }
+
+    /**
+     * A folio whose text is indexed elsewhere (Elasticsearch) hands back ids best first: they are
+     * the match — order kept, row scope still applied, one call however many queries the page runs.
+     */
+    public function testATextMatcherSuppliesRankedIdsAndIsAskedOnce(): void
+    {
+        $this->connection->executeStatement('DROP TABLE item_fts');
+        $calls = [];
+        $matcher = function (string $text) use (&$calls): array {
+            $calls[] = $text;
+
+            return ['r2', 'r3', 'r0', 'gone-since-last-build'];
+        };
+
+        $result = $this->searchWithout(['ftsTable' => null, 'textMatcher' => $matcher, 'where' => "d.core_id = 'article'"], 'snap bean');
+
+        self::assertSame(['snap bean'], $calls);
+        self::assertSame(2, $result->getTotalResults());
+        self::assertSame(['r2', 'r0'], array_map(fn ($h) => $h->getData()['id'], $result->getHits()));
+    }
+
+    /** A matcher that cannot answer (engine down, folio not indexed yet) falls back like no matcher. */
+    public function testATextMatcherThatCannotAnswerFallsBack(): void
+    {
+        $this->connection->executeStatement('DROP TABLE item_fts');
+
+        $result = $this->searchWithout(['ftsTable' => null, 'textMatcher' => fn (): ?array => null, 'textFallbackColumns' => ['d.title']], 'fair');
+        self::assertSame(['r1'], array_map(fn ($h) => $h->getData()['id'], $result->getHits()));
+
+        self::assertSame(0, $this->searchWithout(['ftsTable' => null, 'textMatcher' => fn (): array => []], 'fair')->getTotalResults());
+        self::assertSame(4, $this->searchWithout(['ftsTable' => null, 'textMatcher' => fn (): array => ['r1']], '')->getTotalResults());
+    }
 }
