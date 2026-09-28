@@ -45,6 +45,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             'textFallbackColumns' => [],
             'facetCountTable' => null,
             'facetValueTable' => null,
+            'columnFilters' => [],
             'liveFacets' => true,
             'textMatcher' => null,
         ]);
@@ -67,6 +68,7 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
         $resolver->setAllowedTypes('maxFacetValues', 'int');
         $resolver->setAllowedTypes('facetCountTable', ['null', 'string']);
         $resolver->setAllowedTypes('facetValueTable', ['null', 'string']);
+        $resolver->setAllowedTypes('columnFilters', 'string[]');
         $resolver->setAllowedTypes('liveFacets', 'bool');
         // For a search with no FTS table whose text lives in another engine: called with the query
         // string, returns the matching idColumn values best first, or null when that engine cannot
@@ -349,14 +351,22 @@ final readonly class SqliteFts5Adapter implements AdapterInterface
             $this->applyFilters($query, $search, $where, $params, $facet->getProperty());
 
             $usesFts = $this->usesFts($query, $search);
-            $sql = sprintf(
-                '%sSELECT MIN(%s) AS min_value, MAX(%s) AS max_value FROM %s%s%s',
-                $this->ftsCtePrefix($query, $search, $usesFts),
-                $column,
-                $column,
+            // Two scalar subqueries, not MIN(x), MAX(x) in one SELECT: SQLite answers a lone MIN or
+            // MAX from an index in one probe, but the pair scans every matching row. On a 1.08M-row
+            // folio with (core_id, sort_key) indexed that is ~0 ms against 1.6 s.
+            $from = sprintf(
+                ' FROM %s%s%s',
                 $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')) . ' d',
                 $this->joinClause($query, $search, $usesFts, '__fts'),
                 $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
+            );
+            $sql = sprintf(
+                '%sSELECT (SELECT MIN(%s)%s) AS min_value, (SELECT MAX(%s)%s) AS max_value',
+                $this->ftsCtePrefix($query, $search, $usesFts),
+                $column,
+                $from,
+                $column,
+                $from,
             );
             $row = $this->connection->executeQuery($sql, $params)->fetchAssociative();
             if (!$row) {

@@ -101,8 +101,13 @@ trait DbalAdapterTrait
                 $params[$name] = $value;
             }
 
+            // columnFilters: fields whose facetColumns entry is a real, single-valued column (folio's
+            // core/dtoType), filtered there instead of through the value table. /search/obj on a
+            // 1.08M-row folio also scopes by core_id, and the redundant core=obj EXISTS took the page
+            // query from 0.4 s to 2.5 s and the count from 0.02 s to 0.5 s. Not every facetColumns
+            // entry qualifies: a json_extract() of an array field still needs the value table.
             $facetValueTable = $this->optionalStringParameter($search, 'facetValueTable');
-            if ($facetValueTable !== null) {
+            if ($facetValueTable !== null && !$this->isColumnFilter($search, $filter->getProperty())) {
                 $fieldParam = $this->parameterName($filter->getProperty() . '_facet_field');
                 $params[$fieldParam] = $filter->getProperty();
                 $alias = 'fv_' . $this->parameterName($filter->getProperty());
@@ -137,6 +142,17 @@ trait DbalAdapterTrait
             $where[] = sprintf('CAST(%s AS REAL) <= CAST(:%s AS REAL)', $column, $name);
             $params[$name] = $filter->getMax();
         }
+    }
+
+    private function isColumnFilter(SearchInterface $search, string $property): bool
+    {
+        try {
+            $properties = $search->getResolvedAdapterParameter('columnFilters');
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return is_array($properties) && in_array($property, $properties, true);
     }
 
     private function columnFor(SearchInterface $search, string $parameter, string $property): string
