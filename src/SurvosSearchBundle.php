@@ -222,7 +222,9 @@ final class SurvosSearchBundle extends AbstractUxBundle
 
         $bundlesMetadata = $builder->getParameter('kernel.bundles_metadata');
 
-        return isset($bundlesMetadata['FrameworkBundle'])
-            && is_file($bundlesMetadata['FrameworkBundle']['path'].'/Resources/config/asset_mapper.php');
+        // Symfony 8.2 moved asset mapper out of FrameworkBundle into AssetMapperBundle.
+        return isset($bundlesMetadata['AssetMapperBundle'])
+            || (isset($bundlesMetadata['FrameworkBundle'])
+                && is_file($bundlesMetadata['FrameworkBundle']['path'].'/Resources/config/asset_mapper.php'));
     }
 }
