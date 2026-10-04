@@ -1,4 +1,5 @@
 import { Controller } from '@hotwired/stimulus';
+import '../../styles/instantsearch.css';
 import instantsearch from 'instantsearch.js';
 import { searchBox, hits, stats, pagination, refinementList, currentRefinements, clearRefinements, sortBy, rangeInput, configure } from 'instantsearch.js/es/widgets';
 import { createEngine } from '@tacman1123/twig-browser';
@@ -7,7 +8,7 @@ import { installSymfonyTwigAPI } from '@tacman1123/twig-browser/adapters/symfony
 /** InstantSearch widgets with a Symfony backend and client-rendered Twig hits. */
 export default class extends Controller {
     static targets = ['query', 'hits', 'stats', 'pagination', 'current', 'clear', 'sort', 'facet', 'range', 'error'];
-    static values = { endpoint: String, name: String, template: String, sorts: Array, context: Object, rawJson: { type: Boolean, default: true } };
+    static values = { endpoint: String, name: String, template: String, sorts: Array, context: Object, rawJson: { type: Boolean, default: true }, cssClasses: Object };
 
     async connect() {
         this.disposed = false;
@@ -46,24 +47,46 @@ export default class extends Controller {
                     if (inputs[1]) inputs[1].setAttribute('aria-label', `${node.dataset.label || node.dataset.field} maximum`);
                 }
             });
+            const css = this.cssClassesFor();
             const widgets = [
                 configure({ hitsPerPage: 24 }),
-                searchBox({ container: this.queryTarget, placeholder: 'Search this collection…', showSubmit: false, searchAsYouType: true }),
-                hits({ container: this.hitsTarget, escapeHTML: false, templates: {
+                searchBox({ container: this.queryTarget, placeholder: 'Search this collection…', showSubmit: false, searchAsYouType: true, showLoadingIndicator: false, cssClasses: css.searchBox }),
+                hits({ container: this.hitsTarget, escapeHTML: false, cssClasses: css.hits, templates: {
                     item: (hit) => this.rawJsonButton(hit) + engine.renderBlock('hit', { hit, ...this.contextValue }),
-                    empty: '<div class="bench-empty"><h2>No matches yet</h2><p>Try a shorter query or clear a filter.</p></div>',
+                    empty: '<div class="empty"><p class="empty-title">No matches yet</p><p class="empty-subtitle text-secondary">Try a shorter query or clear a filter.</p></div>',
                 } }),
-                stats({ container: this.statsTarget }),
-                pagination({ container: this.paginationTarget, padding: 2, showFirst: false, showLast: false }),
-                currentRefinements({ container: this.currentTarget }),
-                clearRefinements({ container: this.clearTarget, templates: { resetLabel: 'Clear filters' } }),
-                sortBy({ container: this.sortTarget, items: [{ value: this.nameValue, label: 'Relevance' }, ...this.sortsValue] }),
+                stats({ container: this.statsTarget, cssClasses: css.stats }),
+                pagination({ container: this.paginationTarget, padding: 2, showFirst: false, showLast: false, cssClasses: css.pagination }),
+                currentRefinements({ container: this.currentTarget, cssClasses: css.currentRefinements }),
+                clearRefinements({ container: this.clearTarget, templates: { resetLabel: 'Clear filters' }, cssClasses: css.clearRefinements }),
+                sortBy({ container: this.sortTarget, items: [{ value: this.nameValue, label: 'Relevance' }, ...this.sortsValue], cssClasses: css.sortBy }),
             ];
-            for (const node of this.facetTargets) widgets.push(refinementList({ container: node, attribute: node.dataset.field, limit: 8, showMore: true, showMoreLimit: 100, sortBy: ['count:desc', 'name:asc'] }));
-            for (const node of this.rangeTargets) widgets.push(rangeInput({ container: node, attribute: node.dataset.field, precision: 0 }));
+            for (const node of this.facetTargets) widgets.push(refinementList({ container: node, attribute: node.dataset.field, limit: 8, showMore: true, showMoreLimit: 100, sortBy: ['count:desc', 'name:asc'], cssClasses: css.refinementList }));
+            for (const node of this.rangeTargets) widgets.push(rangeInput({ container: node, attribute: node.dataset.field, precision: 0, cssClasses: css.rangeInput }));
             this.search.addWidgets(widgets);
             this.search.start();
         } catch (error) { this.showError(error); }
+    }
+
+    /**
+     * Tabler/Bootstrap classes for every widget, so no app has to restyle `.ais-*`. Apps override per widget with
+     * `cssClassesValue` (merged over these; the stock `ais-*` class names are always kept as hooks).
+     * The two `survos-*` classes live in the bundle's instantsearch.css.
+     */
+    cssClassesFor() {
+        const defaults = {
+            searchBox: { form: 'm-0', input: 'form-control' },
+            hits: { list: 'row row-cards list-unstyled m-0', item: 'col-12 col-md-6 col-xl-4 position-relative', emptyRoot: 'py-4' },
+            stats: { text: 'text-secondary small' },
+            pagination: { list: 'pagination justify-content-center m-0', item: 'page-item', link: 'page-link', selectedItem: 'active', disabledItem: 'disabled' },
+            currentRefinements: { label: 'd-none', list: 'list-unstyled d-flex flex-wrap gap-1 m-0', item: 'badge bg-blue-lt d-inline-flex align-items-center gap-1', category: 'd-inline-flex align-items-center gap-1', delete: 'btn-close ms-1' },
+            clearRefinements: { button: 'btn btn-sm btn-outline-secondary', disabledButton: 'disabled' },
+            sortBy: { select: 'form-select form-select-sm' },
+            refinementList: { list: 'list-unstyled survos-facet-list m-0', item: 'py-1', label: 'd-flex align-items-center gap-2 mb-0', checkbox: 'form-check-input m-0 flex-shrink-0', labelText: 'form-check-label text-truncate', count: 'badge bg-secondary-lt ms-auto', showMore: 'btn btn-link btn-sm p-0 mt-1' },
+            rangeInput: { form: 'd-flex align-items-center gap-1', label: 'flex-fill m-0', input: 'form-control form-control-sm survos-range-input', submit: 'btn btn-sm btn-outline-secondary' },
+        };
+        const overrides = this.cssClassesValue || {};
+        return Object.fromEntries(Object.entries(defaults).map(([widget, map]) => [widget, { ...map, ...(overrides[widget] || {}) }]));
     }
 
     /** The indexed document is what explains a card: a missing image is usually a missing field. */
@@ -71,8 +94,7 @@ export default class extends Controller {
         if (!document.getElementById('survos-search-raw-json-style')) {
             const style = document.createElement('style');
             style.id = 'survos-search-raw-json-style';
-            style.textContent = '.ais-Hits-item{position:relative}'
-                + '.survos-raw-json-btn{position:absolute;top:.25rem;right:.25rem;z-index:2;font:600 .75rem/1 ui-monospace,monospace;padding:.2rem .35rem;border:1px solid #0003;border-radius:.25rem;background:#fffc;color:#333;cursor:pointer;opacity:.55}'
+            style.textContent = '.survos-raw-json-btn{position:absolute;top:.25rem;right:.25rem;z-index:2;font:600 .75rem/1 ui-monospace,monospace;padding:.2rem .35rem;border:1px solid #0003;border-radius:.25rem;background:#fffc;color:#333;cursor:pointer;opacity:.55}'
                 + '.survos-raw-json-btn:hover,.survos-raw-json-btn:focus-visible{opacity:1}'
                 + '.survos-raw-json{width:min(56rem,calc(100vw - 2rem));max-height:85vh;padding:0;border:1px solid #0003;border-radius:.5rem}'
                 + '.survos-raw-json header{display:flex;gap:.5rem;align-items:center;padding:.5rem .75rem;border-bottom:1px solid #0002;position:sticky;top:0;background:inherit}'

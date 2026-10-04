@@ -1,0 +1,3 @@
+/* The only CSS the instantsearch controller needs; widget look comes from Tabler classes via cssClasses. */
+.survos-facet-list { max-height: 155px; overflow: auto; }
+.survos-range-input { width: 100%; min-width: 0; }
