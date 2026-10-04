@@ -8,13 +8,14 @@ import { installSymfonyTwigAPI } from '@tacman1123/twig-browser/adapters/symfony
 /** InstantSearch widgets with a Symfony backend and client-rendered Twig hits. */
 export default class extends Controller {
     static targets = ['query', 'hits', 'stats', 'pagination', 'current', 'clear', 'sort', 'facet', 'range', 'error'];
-    static values = { endpoint: String, name: String, template: String, sorts: Array, context: Object, rawJson: { type: Boolean, default: true }, cssClasses: Object };
+    static values = { endpoint: String, name: String, template: String, sorts: Array, context: Object, rawJson: { type: Boolean, default: true }, cssClasses: Object, originLinks: { type: Boolean, default: true } };
 
     async connect() {
         this.disposed = false;
         // objectID -> hit as returned by the endpoint, for the {} raw-document dialog.
         this.rawHits = new Map();
         if (this.rawJsonValue) this.installRawJsonDialog();
+        if (this.originLinksValue) this.installOriginLinks();
         try {
             const [routes, response] = await Promise.all([
                 import('@survos/js-twig/generated/fos_routes.js'),
@@ -89,6 +90,27 @@ export default class extends Controller {
         return Object.fromEntries(Object.entries(defaults).map(([widget, map]) => [widget, { ...map, ...(overrides[widget] || {}) }]));
     }
 
+    /**
+     * Result links remember the search they came from: the current path and query go on the link as `in`, and the
+     * opened page's breadcrumb (tabler-bundle) starts with a way back to exactly this search. Instantsearch rewrites
+     * the URL as you type, so it is read when the link is about to be used (pointer down, keyboard focus, context
+     * menu), not when the hit is rendered. The token is base64url of the path and query, as NavigationOrigin expects.
+     */
+    installOriginLinks() {
+        this.onOriginIntent = (event) => {
+            const link = event.target.closest?.('a[href]');
+            if (!link || !this.hitsTarget.contains(link)) return;
+            const url = new URL(link.href, location.href);
+            const here = location.pathname + location.search;
+            if (url.origin !== location.origin || url.searchParams.has('in') || here.length > 600) return;
+            let binary = '';
+            for (const byte of new TextEncoder().encode(here)) binary += String.fromCharCode(byte);
+            url.searchParams.set('in', btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''));
+            link.setAttribute('href', url.pathname + url.search + url.hash);
+        };
+        for (const type of ['pointerdown', 'focusin', 'contextmenu']) this.element.addEventListener(type, this.onOriginIntent, true);
+    }
+
     /** The indexed document is what explains a card: a missing image is usually a missing field. */
     installRawJsonDialog() {
         if (!document.getElementById('survos-search-raw-json-style')) {
@@ -159,6 +181,7 @@ export default class extends Controller {
         this.disposed = true;
         this.search?.dispose();
         if (this.onRawJsonClick) this.element.removeEventListener('click', this.onRawJsonClick);
+        if (this.onOriginIntent) for (const type of ['pointerdown', 'focusin', 'contextmenu']) this.element.removeEventListener(type, this.onOriginIntent, true);
         this.rawDialog?.remove();
     }
 }
