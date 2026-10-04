@@ -9,13 +9,11 @@
                whole template just to make that call (zm, fotostory, ink). #}
             {% set hitTemplate = survos_hit_template() %}
             {% if hitTemplate %}
-                <div class="ux-search-hits__list row row-cards">
+                {# ux-search.css makes .ux-search-hits__list a CSS grid (auto-fill, 300px minimum); a Bootstrap
+                   row/col wrapper on top of that fights it and leaves narrow cards in a wide gap. #}
+                <div class="ux-search-hits__list">
                     {% for hit in results.hits %}
-                        {% block templated_hit %}
-                            <div class="col-12 col-sm-6 col-xl-4">
-                                {{ include(hitTemplate, {hit: hit.data}) }}
-                            </div>
-                        {% endblock %}
+                        {% block templated_hit %}{{ include(hitTemplate, {hit: hit.data}) }}{% endblock %}
                     {% endfor %}
                 </div>
             {% else %}

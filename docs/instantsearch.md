@@ -5,9 +5,10 @@ SearchBundle's named-query layer. Elasticsearch is the first evaluated backend (
 not a mandatory engine. Search/index lifecycle remains in each engine's own bundle.
 
 Enable the controller in `assets/controllers.json`. Install the InstantSearch and twig-browser
-imports declared in this bundle's assets/package.json, and use `survos/js-twig-bundle` to generate
-`@survos/js-twig/generated/fos_routes.js`. FOS JSRouting supplies browser `path()`; this does not
-require FOSElasticaBundle. Add result detail routes to js-twig's `routes_to_expose`.
+imports declared in this bundle's assets/package.json, and use `survos/js-twig-bundle` for
+`@survos/js-twig/routing`. Cache warmup generates routes.json; AssetMapper resolves
+the runtime automatically, with no application routing importmap entry. Neither
+FOSJsRoutingBundle nor FOSElasticaBundle is required. Add result detail routes to js-twig's `routes_to_expose`.
 
 ```yaml
 survos_search:
