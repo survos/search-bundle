@@ -9,7 +9,13 @@ use Elastic\Elasticsearch\Response\Elasticsearch;
 
 final readonly class ElasticsearchClient implements ElasticsearchClientInterface
 {
-    public function __construct(private Client $client) {}
+    public function __construct(private Client $client, private ?string $endpoint = null) {}
+
+    /** Connection URL supplied by the factory, without authentication or DSN options. */
+    public function getEndpoint(): ?string
+    {
+        return $this->endpoint;
+    }
 
     public function search(string $index, array $body): array
     {

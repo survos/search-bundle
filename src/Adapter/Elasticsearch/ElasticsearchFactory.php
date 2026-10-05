@@ -66,7 +66,7 @@ final readonly class ElasticsearchFactory implements AdapterFactoryInterface
             );
         }
 
-        $client = new ElasticsearchClient($builder->build());
+        $client = new ElasticsearchClient($builder->build(), $host);
 
         return new ElasticsearchAdapter(
             $this->clientDecorator?->decorate($client) ?? $client,
