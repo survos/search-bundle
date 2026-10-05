@@ -110,6 +110,44 @@ readonly class QueryBuilderHelper
         return $qb;
     }
 
+    public function hasMultiValueFacet(string $property): bool
+    {
+        return isset($this->search->getResolvedAdapterParameter(DoctrineAdapter::MULTI_VALUE_FACETS)[$property]);
+    }
+
+    /** @return list<array{value: string, total: int}> */
+    public function getMultiValueFacetTerms(Facet $facet): array
+    {
+        $qb = $this->createBaseQueryBuilder();
+        $this->applyQueryString($qb);
+        foreach ($this->query->getActiveFilters() as $filter) {
+            if ($filter->getProperty() !== $facet->getProperty()) {
+                $this->applyFilter($qb, $filter);
+            }
+        }
+        $resolver = $this->search->getResolvedAdapterParameter(DoctrineAdapter::MULTI_VALUE_FACETS)[$facet->getProperty()];
+        $counts = [];
+        foreach ($resolver($qb) as $values) {
+            foreach (array_unique($values) as $value) {
+                $counts[$value] = ($counts[$value] ?? 0) + 1;
+            }
+        }
+        arsort($counts);
+        $filter = $this->query->getActiveFilter($facet->getProperty());
+        $checked = $filter instanceof TermFilter ? $filter->getValues() : [];
+        $limited = array_slice($counts, 0, $this->search->getResolvedAdapterParameter(DoctrineAdapter::MAX_FACET_VALUES_PARAM), true);
+        foreach ($checked as $value) {
+            $limited[$value] = $counts[$value] ?? 0;
+        }
+
+        $rows = [];
+        foreach ($limited as $value => $total) {
+            $rows[] = ['value' => (string) $value, 'total' => $total];
+        }
+
+        return $rows;
+    }
+
     private function createBaseQueryBuilder(): QueryBuilder
     {
         $repository = $this->manager->getRepository($this->search->getIndexName()); // @phpstan-ignore argument.templateType
@@ -183,6 +221,24 @@ readonly class QueryBuilderHelper
 
     private function applyFilter(QueryBuilder $qb, FilterInterface $filter): void
     {
+        if ($filter instanceof TermFilter && $filter->hasValues() && $this->hasMultiValueFacet($filter->getProperty())) {
+            $resolver = $this->search->getResolvedAdapterParameter(DoctrineAdapter::MULTI_VALUE_FACETS)[$filter->getProperty()];
+            $ids = [];
+            foreach ($resolver($this->createBaseQueryBuilder()) as $id => $values) {
+                if (array_intersect($filter->getValues(), $values) !== []) {
+                    $ids[] = $id;
+                }
+            }
+            if ($ids === []) {
+                $qb->andWhere('1 = 0');
+            } else {
+                $parameter = 'multi_'.md5($filter->getProperty());
+                $qb->andWhere($this->getIdentifierField().' IN (:'.$parameter.')')->setParameter($parameter, $ids);
+            }
+
+            return;
+        }
+
         [$alias, $property] = $this->extractAliasAndProperty($filter->getProperty());
         $this->updateQueryBuilderAssociations($qb, $alias);
 

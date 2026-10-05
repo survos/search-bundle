@@ -40,6 +40,9 @@ readonly class DoctrineAdapter implements AdapterInterface
 
     public const string SEARCH_FIELDS = 'searchFields';
 
+    /** property => Closure(QueryBuilder): array<entity-id, list<string>>; for bounded catalogs. */
+    public const string MULTI_VALUE_FACETS = 'multiValueFacets';
+
     /**
      * When true (default), total and facet counts use count(DISTINCT <identifier>),
      * which is required for correct counts when a facet or filter introduces a
@@ -116,6 +119,7 @@ readonly class DoctrineAdapter implements AdapterInterface
             self::QUERY_BUILDER_ALIAS => 'o',
             self::QUERY_BUILDER => static function (QueryBuilder $queryBuilder) {},
             self::SEARCH_FIELDS => [],
+            self::MULTI_VALUE_FACETS => [],
             self::COUNT_DISTINCT => true,
             self::FETCH_JOIN_COLLECTION => true,
         ]);
@@ -124,6 +128,7 @@ readonly class DoctrineAdapter implements AdapterInterface
         $resolver->setAllowedTypes(self::QUERY_BUILDER_ALIAS, 'string');
         $resolver->setAllowedTypes(self::QUERY_BUILDER, 'Closure');
         $resolver->setAllowedTypes(self::SEARCH_FIELDS, 'string[]');
+        $resolver->setAllowedTypes(self::MULTI_VALUE_FACETS, 'array');
         $resolver->setAllowedTypes(self::COUNT_DISTINCT, 'bool');
         $resolver->setAllowedTypes(self::FETCH_JOIN_COLLECTION, 'bool');
     }
@@ -153,8 +158,10 @@ readonly class DoctrineAdapter implements AdapterInterface
 
             $checkedFacets = [];
             $uncheckedFacets = [];
-            $qb = $helper->getFacetTermQuery($facet);
-            foreach ($qb->getQuery()->getArrayResult() as $row) {
+            $rows = $helper->hasMultiValueFacet($facet->getProperty())
+                ? $helper->getMultiValueFacetTerms($facet)
+                : $helper->getFacetTermQuery($facet)->getQuery()->getArrayResult();
+            foreach ($rows as $row) {
                 $rowValue = $row['value'] instanceof \BackedEnum ? $row['value']->value : $row['value'];
 
                 $rowKey = null === $rowValue ? '' : $rowValue;

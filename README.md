@@ -191,3 +191,17 @@ The UX layer is derived from and inspired by [Mezcalito UX Search](https://githu
 
 See [InstantSearch with named searches](docs/instantsearch.md) for the optional browser UI,
 public HTTP allowlist, supported lexical features, and twig-browser/FOS route integration.
+
+### Multi-valued Doctrine facets
+
+For bounded catalogs with tags stored in JSON metadata, configure
+`DoctrineAdapter::MULTI_VALUE_FACETS` as a map from facet property to a closure.
+The closure receives a query builder and returns `entity identifier => list<string>`.
+It must preserve the query's restrictions and return each root entity only once;
+select scalar IDs and metadata rather than hydrating entities or opening files.
+
+The adapter applies selected values with OR semantics before pagination, counts each
+value once per root entity, and excludes a facet's own selection from its counts.
+Other facets and text search still constrain those counts. This reads metadata into
+PHP for portability across Doctrine databases; large catalogs should use a search
+index or a normalized tag relation instead.

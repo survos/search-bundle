@@ -23,6 +23,9 @@ class Foo
     #[ORM\Column]
     public ?int $id = null;
 
+    #[ORM\Column(type: 'json')]
+    public array $metadata = [];
+
     public function __construct(
         #[ORM\Column] public ?string $type = null,
         #[ORM\Column] public ?string $brand = null,
