@@ -43,7 +43,12 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
             'embeddingProvider' => null,
             'queryVector' => null,
             'retrievalMode' => 'lexical',
-            'fuzziness' => 'AUTO',
+            // Meilisearch's typo thresholds: none below 5 characters, one up to 8, two from 9.
+            // Plain AUTO allows a typo from 3 characters, so "geo" matched "seo" and "gen".
+            'fuzziness' => 'AUTO:5,9',
+            // Leading characters a typo may not touch. 1 keeps "geo" from reaching "seo" even in
+            // a longer word, and makes the fuzzy expansion far cheaper.
+            'fuzzyPrefixLength' => 1,
             'prefixSearch' => true,
             'vectorField' => 'embedding',
             'vectorDimensions' => null,
@@ -83,6 +88,7 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
             $resolver->setAllowedTypes($integer, 'int');
         }
         $resolver->setAllowedTypes('fuzziness', ['string', 'int']);
+        $resolver->setAllowedTypes('fuzzyPrefixLength', 'int');
         $resolver->setAllowedTypes('prefixSearch', 'bool');
         $resolver->setAllowedTypes('highlight', 'bool');
         $resolver->setAllowedTypes('explain', 'bool');

@@ -107,7 +107,11 @@ final readonly class ElasticsearchQueryBuilder
         $exact = ['query' => $query, 'fields' => $fields, 'type' => 'best_fields', 'operator' => 'and'];
         $clauses = [
             ['multi_match' => $exact + ['boost' => 3]],
-            ['multi_match' => $exact + ['fuzziness' => $search->getResolvedAdapterParameter('fuzziness'), 'max_expansions' => 50]],
+            ['multi_match' => $exact + [
+                'fuzziness' => $search->getResolvedAdapterParameter('fuzziness'),
+                'prefix_length' => $search->getResolvedAdapterParameter('fuzzyPrefixLength'),
+                'max_expansions' => 50,
+            ]],
         ];
         if ($search->getResolvedAdapterParameter('prefixSearch')) {
             $clauses[] = ['multi_match' => ['query' => $query, 'fields' => $fields, 'type' => 'bool_prefix', 'operator' => 'and', 'boost' => 2]];

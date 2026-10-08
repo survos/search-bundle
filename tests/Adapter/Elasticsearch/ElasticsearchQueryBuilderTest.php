@@ -29,6 +29,15 @@ final class ElasticsearchQueryBuilderTest extends TestCase
         self::assertArrayNotHasKey('retriever', $body);
     }
 
+    public function testFuzzyClauseKeepsTheFirstLetterAndShortWordsExact(): void
+    {
+        $body = (new ElasticsearchQueryBuilder())->build((new Query())->setQueryString('geo'), $this->search([]));
+
+        $fuzzy = $body['query']['bool']['must'][0]['dis_max']['queries'][1]['multi_match'];
+        self::assertSame('AUTO:5,9', $fuzzy['fuzziness']);
+        self::assertSame(1, $fuzzy['prefix_length']);
+    }
+
     public function testVectorQueryUsesProvidedVector(): void
     {
         $query = (new Query())->setQueryString('exchange data');
@@ -63,7 +72,8 @@ final class ElasticsearchQueryBuilderTest extends TestCase
     {
         $parameters = $overrides + [
             'retrievalMode' => 'lexical',
-            'fuzziness' => 'AUTO',
+            'fuzziness' => 'AUTO:5,9',
+            'fuzzyPrefixLength' => 1,
             'prefixSearch' => true,
             'searchFields' => ['name', 'description'],
             'sourceFields' => [],
