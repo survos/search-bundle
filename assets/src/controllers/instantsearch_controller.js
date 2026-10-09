@@ -18,7 +18,7 @@ export default class extends Controller {
         if (this.originLinksValue) this.installOriginLinks();
         try {
             const [routes, response] = await Promise.all([
-                import('@survos/js-twig/routing'),
+                import('@survos/js-twig-bundle/routing'),
                 fetch(this.templateValue, { credentials: 'same-origin' }),
             ]);
             if (!response.ok) throw new Error('Could not load the result template.');

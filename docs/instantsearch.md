@@ -6,7 +6,7 @@ not a mandatory engine. Search/index lifecycle remains in each engine's own bund
 
 Enable the controller in `assets/controllers.json`. Install the InstantSearch and twig-browser
 imports declared in this bundle's assets/package.json, and use `survos/js-twig-bundle` for
-`@survos/js-twig/routing`. Cache warmup generates routes.json; AssetMapper resolves
+`@survos/js-twig-bundle/routing`. Cache warmup generates routes.json; AssetMapper resolves
 the runtime automatically, with no application routing importmap entry. Neither
 FOSJsRoutingBundle nor FOSElasticaBundle is required. Add result detail routes to js-twig's `routes_to_expose`.
 
