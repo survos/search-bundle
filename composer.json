@@ -48,7 +48,7 @@
     },
     "require-dev": {
         "algolia/algoliasearch-client-php": "^4.37",
-        "doctrine/orm": "^3.4",
+        "doctrine/orm": "^3.7",
         "elasticsearch/elasticsearch": "^9.0",
         "friendsofphp/php-cs-fixer": "^3.64",
         "meilisearch/meilisearch-php": "^1.10",
