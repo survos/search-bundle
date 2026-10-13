@@ -67,11 +67,21 @@ final class ElasticsearchQueryBuilderTest extends TestCase
         self::assertSame(60, $body['retriever']['rrf']['rank_constant']);
     }
 
-    /** @param array<string, mixed> $overrides */
+    /** A search scoped within a shared index carries its base filters on every query, text or not. */
+    public function testBaseFiltersScopeEveryQuery(): void
+    {
+        $scope = [['term' => ['role' => 'record']]];
+        foreach (['', 'portrait'] as $text) {
+            $body = (new ElasticsearchQueryBuilder())->build((new Query())->setQueryString($text), $this->search(['baseFilters' => $scope]));
+            self::assertSame($scope, $body['query']['bool']['filter'], 'query "'.$text.'"');
+        }
+    }
+
     private function search(array $overrides): SearchInterface
     {
         $parameters = $overrides + [
             'retrievalMode' => 'lexical',
+            'baseFilters' => [],
             'fuzziness' => 'AUTO:5,9',
             'fuzzyPrefixLength' => 1,
             'prefixSearch' => true,

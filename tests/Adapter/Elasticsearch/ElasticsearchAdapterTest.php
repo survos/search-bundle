@@ -108,7 +108,7 @@ final class ElasticsearchAdapterTest extends TestCase
     private function parameters(): array
     {
         return [
-            'index' => 'packages',
+            'index' => 'packages', 'sharedIndex' => false, 'baseFilters' => [],
             'retrievalMode' => 'lexical', 'fuzziness' => 'AUTO:5,9', 'fuzzyPrefixLength' => 1, 'prefixSearch' => true,
             'searchFields' => ['name', 'description'],
             'sourceFields' => ['name', 'description'],

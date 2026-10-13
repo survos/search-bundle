@@ -32,6 +32,11 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
     {
         $resolver->setDefaults([
             'index' => null,
+            // A cluster-wide index another app writes (e.g. folio-bundle's folio_item): queried by
+            // its own name, without this app's index_prefix. Read it with baseFilters, never write it.
+            'sharedIndex' => false,
+            // Filter clauses every query carries, the scope of this search within its index.
+            'baseFilters' => [],
             'searchFields' => [],
             'sourceFields' => [],
             'facetFields' => [],
@@ -70,6 +75,8 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
         ]);
 
         $resolver->setAllowedTypes('index', ['null', 'string']);
+        $resolver->setAllowedTypes('sharedIndex', 'bool');
+        $resolver->setAllowedTypes('baseFilters', 'array');
         $resolver->setAllowedTypes('searchFields', 'string[]');
         $resolver->setAllowedTypes('sourceFields', 'string[]');
         $resolver->setAllowedTypes('facetFields', 'array');

@@ -18,7 +18,10 @@ final readonly class ElasticsearchQueryBuilder
         $mode = $forcedMode ?? $search->getResolvedAdapterParameter('retrievalMode');
         $queryString = trim($query->getQueryString());
         $filters = $this->filters($query, $search);
-        $lexical = $this->lexicalQuery($queryString, $search, $filters);
+        // The search's scope within its index (baseFilters): part of the query itself, never the
+        // post_filter, so facet counts are scoped too — a shared index holds far more than one search's rows.
+        $base = array_values($search->getResolvedAdapterParameter('baseFilters') ?? []);
+        $lexical = $this->lexicalQuery($queryString, $search, [...$base, ...$filters]);
 
         $body = [
             'size' => max(1, $query->getActiveHitsPerPage()),
@@ -42,7 +45,7 @@ final readonly class ElasticsearchQueryBuilder
         }
 
         if ('lexical' === $mode || '' === $queryString) {
-            $body['query'] = $this->lexicalQuery($queryString, $search, []);
+            $body['query'] = $this->lexicalQuery($queryString, $search, $base);
             if ([] !== $filters) {
                 $body['post_filter'] = ['bool' => ['filter' => $filters]];
             }
@@ -52,14 +55,14 @@ final readonly class ElasticsearchQueryBuilder
             }
         } elseif ('vector' === $mode) {
             $vector = $this->queryVector($queryString, $search);
-            $body['retriever'] = ['knn' => $this->knn($vector, $search, $filters)];
+            $body['retriever'] = ['knn' => $this->knn($vector, $search, [...$base, ...$filters])];
         } else {
             $vector = $this->queryVector($queryString, $search);
             $body['retriever'] = [
                 'rrf' => [
                     'retrievers' => [
                         ['standard' => ['query' => $lexical]],
-                        ['knn' => $this->knn($vector, $search, $filters)],
+                        ['knn' => $this->knn($vector, $search, [...$base, ...$filters])],
                     ],
                     'rank_constant' => $search->getResolvedAdapterParameter('rankConstant'),
                     'rank_window_size' => $search->getResolvedAdapterParameter('rankWindowSize'),

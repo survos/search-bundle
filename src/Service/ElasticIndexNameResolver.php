@@ -75,7 +75,21 @@ final readonly class ElasticIndexNameResolver
     /** The actual Elasticsearch index name. */
     public function uid(SearchInterface $search, ?string $locale = null): string
     {
+        // A shared index belongs to the cluster, not this app: no prefix (adapter parameter sharedIndex).
+        if (true === $this->sharedIndex($search)) {
+            return $this->raw($search, $locale);
+        }
+
         return $this->uidForRaw($this->raw($search, $locale));
+    }
+
+    private function sharedIndex(SearchInterface $search): bool
+    {
+        try {
+            return true === $search->getResolvedAdapterParameter('sharedIndex');
+        } catch (\Throwable) {
+            return false; // not an Elasticsearch search
+        }
     }
 
     /** @param string $base an already-sanitised logical name */

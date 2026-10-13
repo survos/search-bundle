@@ -92,11 +92,24 @@ final class ElasticIndexNameResolverTest extends TestCase
         self::assertSame('kpa_song_fr', $resolver->uid(self::search(index: 'song'), 'fr'));
     }
 
-    private static function search(?string $index = null, string $indexName = 'fallback'): SearchInterface
+    /** Another app writes a shared index (folio_item); every app reads it by its own name. */
+    public function testASharedIndexIsNeverPrefixed(): void
+    {
+        $resolver = new ElasticIndexNameResolver('zm_');
+
+        self::assertSame('folio_item', $resolver->uid(self::search(index: 'folio_item', shared: true)));
+        self::assertSame('zm_folio_item', $resolver->uid(self::search(index: 'folio_item')));
+    }
+
+    private static function search(?string $index = null, string $indexName = 'fallback', bool $shared = false): SearchInterface
     {
         $search = self::createStub(SearchInterface::class);
         $search->method('getResolvedAdapterParameter')
-            ->willReturnCallback(static fn (string $name): mixed => 'index' === $name ? $index : null);
+            ->willReturnCallback(static fn (string $name): mixed => match ($name) {
+                'index' => $index,
+                'sharedIndex' => $shared,
+                default => null,
+            });
         $search->method('getIndexName')->willReturn($indexName);
 
         return $search;
