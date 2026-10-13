@@ -39,7 +39,7 @@ final readonly class HitEntityHydrator implements EventSubscriberInterface
 
         $resultSet = $event->getResultSet();
         $hits = $resultSet->getHits();
-        if ($hits === []) {
+        if ([] === $hits) {
             return;
         }
 
@@ -82,7 +82,7 @@ final readonly class HitEntityHydrator implements EventSubscriberInterface
             }
         }
         $ids = array_values(array_unique($ids));
-        if ($ids === []) {
+        if ([] === $ids) {
             return;
         }
 

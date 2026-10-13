@@ -232,7 +232,7 @@ class Layout
 
         $this->searcher->search($searchQuery, $this->search);
 
-        if ($this->fixedFilters !== [] && $this->contextProvider->hasCurrentContext()) {
+        if ([] !== $this->fixedFilters && $this->contextProvider->hasCurrentContext()) {
             $this->contextProvider->getCurrentContext()->setQuery($publicQuery);
         }
     }
@@ -269,14 +269,14 @@ class Layout
     private function applyFilters(Query $query, array $filters): void
     {
         foreach ($filters as $property => $filter) {
-            if (!is_string($property) || $property === '') {
+            if (!is_string($property) || '' === $property) {
                 continue;
             }
 
             if (is_array($filter) && (array_key_exists('min', $filter) || array_key_exists('max', $filter))) {
                 $min = $this->numericOrNull($filter['min'] ?? null);
                 $max = $this->numericOrNull($filter['max'] ?? null);
-                if ($min !== null || $max !== null) {
+                if (null !== $min || null !== $max) {
                     $query->addActiveFilter(new RangeFilter($property, $min, $max));
                 }
 
@@ -285,8 +285,8 @@ class Layout
 
             $values = is_array($filter) && array_key_exists('values', $filter) ? $filter['values'] : $filter;
             $values = is_array($values) ? $values : [$values];
-            $values = array_values(array_filter($values, static fn (mixed $value): bool => is_scalar($value) && trim((string) $value) !== ''));
-            if ($values !== []) {
+            $values = array_values(array_filter($values, static fn (mixed $value): bool => is_scalar($value) && '' !== trim((string) $value)));
+            if ([] !== $values) {
                 $query->addActiveFilter(new TermFilter($property, array_map('strval', $values)));
             }
         }

@@ -37,8 +37,7 @@ abstract class AbstractFieldSearch extends AbstractSearch
     public function setParameterTranslators(
         #[AutowireIterator('survos_search.parameter_translator')]
         iterable $parameterTranslators,
-    ): void
-    {
+    ): void {
         $this->parameterTranslators = $parameterTranslators;
     }
 
@@ -70,7 +69,7 @@ abstract class AbstractFieldSearch extends AbstractSearch
 
         $this->configureFields($translator);
 
-        if ($translator !== null && $adapter !== null && class_exists($fieldClass)) {
+        if (null !== $translator && null !== $adapter && class_exists($fieldClass)) {
             $translator->translate($this, $fieldClass, $adapter);
         }
     }
@@ -101,7 +100,7 @@ abstract class AbstractFieldSearch extends AbstractSearch
      */
     protected function resolveAdapter(): ?AdapterInterface
     {
-        if ($this->adapterProvider === null) {
+        if (null === $this->adapterProvider) {
             return null;
         }
 
@@ -116,7 +115,7 @@ abstract class AbstractFieldSearch extends AbstractSearch
 
     protected function resolveTranslator(?AdapterInterface $adapter): ?ParameterTranslatorInterface
     {
-        if ($adapter === null) {
+        if (null === $adapter) {
             return null;
         }
 

@@ -6,6 +6,7 @@ namespace Survos\SearchBundle\Adapter\PostgresBm25;
 
 use Doctrine\DBAL\Connection;
 use Survos\SearchBundle\Adapter\AdapterInterface;
+use Survos\SearchBundle\Adapter\DbalAdapterTrait;
 use Survos\SearchBundle\Search\Filter\RangeFilter;
 use Survos\SearchBundle\Search\Filter\TermFilter;
 use Survos\SearchBundle\Search\Query;
@@ -14,7 +15,6 @@ use Survos\SearchBundle\Search\ResultSet\FacetTermDistribution;
 use Survos\SearchBundle\Search\ResultSet\Hit;
 use Survos\SearchBundle\Search\ResultSet\ResultSet;
 use Survos\SearchBundle\Search\SearchInterface;
-use Survos\SearchBundle\Adapter\DbalAdapterTrait;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Contracts\Cache\CacheInterface;
 
@@ -25,7 +25,8 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
     public function __construct(
         private Connection $connection,
         private ?CacheInterface $facetCache = null,
-    ) {}
+    ) {
+    }
 
     public function configureParameters(OptionsResolver $resolver): void
     {
@@ -71,7 +72,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
         $params['limit'] = $limit;
         $params['offset'] = $offset;
 
-        $scoreExpression = $query->getQueryString() === ''
+        $scoreExpression = '' === $query->getQueryString()
             ? '0'
             : $search->getResolvedAdapterParameter('scoreExpression');
 
@@ -80,7 +81,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
             $this->selectList($this->connection, $search->getResolvedAdapterParameter('selectColumns')),
             $scoreExpression,
             $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')),
-            $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
+            [] === $where ? '' : ' WHERE '.implode(' AND ', $where),
             $this->orderBy($query, $search),
         );
 
@@ -93,7 +94,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
         $countSql = sprintf(
             'SELECT COUNT(*) FROM %s d%s',
             $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')),
-            $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
+            [] === $where ? '' : ' WHERE '.implode(' AND ', $where),
         );
 
         return (new ResultSet())
@@ -106,6 +107,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
 
     /**
      * @param array<string, mixed> $params
+     *
      * @return string[]
      */
     private function baseWhere(Query $query, SearchInterface $search, array &$params): array
@@ -115,7 +117,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
             $where[] = $search->getResolvedAdapterParameter('where');
         }
 
-        if ($query->getQueryString() !== '') {
+        if ('' !== $query->getQueryString()) {
             $where[] = $search->getResolvedAdapterParameter('matchExpression');
             $params['bm25Query'] = $query->getQueryString();
 
@@ -134,7 +136,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
         // With a text query, order by relevance: it uses the FTS index, whereas a
         // column sort (e.g. created_at) makes the planner abandon the index and
         // recompute the match for every row. Browse (no query) uses the column sort.
-        if ($query->getQueryString() !== '') {
+        if ('' !== $query->getQueryString()) {
             return 'ORDER BY _score DESC';
         }
 
@@ -172,13 +174,13 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
                 'SELECT %s AS value, COUNT(*) AS total FROM %s d%s GROUP BY %s ORDER BY total DESC LIMIT :maxFacetValues',
                 $column,
                 $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')),
-                $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
+                [] === $where ? '' : ' WHERE '.implode(' AND ', $where),
                 $column,
             );
 
             $values = [];
             foreach ($this->connection->executeQuery($sql, $params)->fetchAllAssociative() as $row) {
-                if ($row['value'] !== null && $row['value'] !== '') {
+                if (null !== $row['value'] && '' !== $row['value']) {
                     $values[$row['value']] = (int) $row['total'];
                 }
             }
@@ -200,7 +202,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
         $stats = [];
         foreach ($search->getFacets() as $facet) {
             $component = $facet->getDisplayComponent();
-            if ($component === null
+            if (null === $component
                 || !is_subclass_of($component, \Survos\SearchBundle\Twig\Components\Facet\AbstractFacet::class)
                 || !$component::usesFacetStats()) {
                 continue;
@@ -217,7 +219,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
                 $column,
                 $column,
                 $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')),
-                $where === [] ? '' : ' WHERE ' . implode(' AND ', $where),
+                [] === $where ? '' : ' WHERE '.implode(' AND ', $where),
             );
 
             $row = $this->connection->executeQuery($sql, $params)->fetchAssociative();
@@ -227,7 +229,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
 
             $min = $row['min_value'];
             $max = $row['max_value'];
-            if ($min === null || $max === null) {
+            if (null === $min || null === $max) {
                 $min = 0;
                 $max = 0;
             }
@@ -246,6 +248,4 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
 
         return $stats;
     }
-
-
 }

@@ -13,9 +13,9 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Search;
 
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Search\Filter\TermFilter;
 use Survos\SearchBundle\Search\Query;
-use PHPUnit\Framework\TestCase;
 
 class QueryTest extends TestCase
 {

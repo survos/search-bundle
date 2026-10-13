@@ -29,7 +29,7 @@ final class SqliteFts5AdapterLiveFacetsTest extends TestCase
         $this->connection->executeStatement('CREATE TABLE item (id TEXT PRIMARY KEY, core_id TEXT NOT NULL, title TEXT)');
         $this->connection->executeStatement("CREATE VIRTUAL TABLE item_fts USING fts5(title, content='item', content_rowid='rowid')");
         foreach (['snap bean crop acreage', 'snap bean prices', 'school board meeting'] as $i => $title) {
-            $this->connection->insert('item', ['id' => "r$i", 'core_id' => $i === 2 ? 'other' : 'article', 'title' => $title]);
+            $this->connection->insert('item', ['id' => "r$i", 'core_id' => 2 === $i ? 'other' : 'article', 'title' => $title]);
         }
         $this->connection->executeStatement("INSERT INTO item_fts(item_fts) VALUES ('rebuild')");
     }

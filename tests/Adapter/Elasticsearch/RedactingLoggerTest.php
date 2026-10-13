@@ -14,7 +14,11 @@ final class RedactingLoggerTest extends TestCase
     {
         $sink = new class extends AbstractLogger {
             public array $lines = [];
-            public function log($level, string|\Stringable $message, array $context = []): void { $this->lines[] = (string) $message; }
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->lines[] = (string) $message;
+            }
         };
 
         (new RedactingLogger($sink))->debug("Headers: {\"Host\":[\"elasticsearch:9200\"],\"Authorization\":[\"ApiKey c2VjcmV0+/==\"]}\nBody: {}");

@@ -13,8 +13,8 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Search\Filter;
 
-use Survos\SearchBundle\Search\Filter\RangeFilter;
 use PHPUnit\Framework\TestCase;
+use Survos\SearchBundle\Search\Filter\RangeFilter;
 
 class RangeFilterTest extends TestCase
 {

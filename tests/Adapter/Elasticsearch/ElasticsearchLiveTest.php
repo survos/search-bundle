@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Tests\Adapter\Elasticsearch;
 
 use Elastic\Elasticsearch\ClientBuilder;
-use Survos\SearchBundle\Search\AbstractSearch;
-use Survos\SearchBundle\Search\Query;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Adapter\Elasticsearch\ElasticsearchAdapter;
 use Survos\SearchBundle\Adapter\Elasticsearch\ElasticsearchClient;
 use Survos\SearchBundle\Adapter\Elasticsearch\ElasticsearchQueryBuilder;
+use Survos\SearchBundle\Search\AbstractSearch;
+use Survos\SearchBundle\Search\Query;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 #[Group('integration')]
@@ -31,7 +31,7 @@ final class ElasticsearchLiveTest extends TestCase
     public function testLexicalVectorAndHybridRetrievalAgainstElasticsearch9(): void
     {
         $url = getenv('ELASTICSEARCH_URL');
-        if (!is_string($url) || $url === '') {
+        if (!is_string($url) || '' === $url) {
             self::markTestSkipped('Set ELASTICSEARCH_URL to run the live Elasticsearch test.');
         }
 

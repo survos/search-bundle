@@ -15,7 +15,8 @@ final class AutoSearchController extends AbstractController
     public function __construct(
         private readonly EntityMetaRegistry $entityMetaRegistry,
         private readonly UxSearchRegistry $uxSearchRegistry,
-    ) {}
+    ) {
+    }
 
     #[Route('/entity/{code}/search', name: 'survos_entity_ux_search', methods: ['GET'])]
     public function __invoke(string $code): Response

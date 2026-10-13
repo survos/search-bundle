@@ -16,10 +16,10 @@ namespace Survos\SearchBundle\Tests\Adapter\Doctrine;
 use Doctrine\ORM\EntityManager;
 use Doctrine\Persistence\ManagerRegistry;
 use Doctrine\Persistence\ObjectManager;
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Adapter\Doctrine\DoctrineAdapter;
 use Survos\SearchBundle\Adapter\Doctrine\DoctrineFactory;
 use Survos\SearchBundle\Exception\DoctrineAdapterException;
-use PHPUnit\Framework\TestCase;
 
 class DoctrineFactoryTest extends TestCase
 {

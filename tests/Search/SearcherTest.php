@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Search;
 
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Adapter\AdapterInterface;
 use Survos\SearchBundle\Adapter\AdapterProvider;
 use Survos\SearchBundle\Context\ContextProvider;
@@ -23,7 +24,6 @@ use Survos\SearchBundle\Search\Query;
 use Survos\SearchBundle\Search\ResultSet\ResultSet;
 use Survos\SearchBundle\Search\Searcher;
 use Survos\SearchBundle\Search\SearchInterface;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 

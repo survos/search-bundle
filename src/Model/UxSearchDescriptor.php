@@ -18,7 +18,8 @@ final readonly class UxSearchDescriptor implements RouteParametersInterface, \St
         public string $adapter = 'default',
         public ?string $hitTemplate = null,
         public ?string $url = null,
-    ) {}
+    ) {
+    }
 
     public function __toString(): string
     {

@@ -40,7 +40,9 @@ final readonly class ElasticParameterTranslator implements ParameterTranslatorIn
         'ftsTable', 'matchExpression', 'scoreExpression',
     ];
 
-    public function __construct(private ?ManagerRegistry $managerRegistry = null) {}
+    public function __construct(private ?ManagerRegistry $managerRegistry = null)
+    {
+    }
 
     /**
      * @param class-string $entityClass
@@ -48,7 +50,7 @@ final readonly class ElasticParameterTranslator implements ParameterTranslatorIn
     public function translate(SearchInterface $search, string $entityClass, AdapterInterface $adapter): void
     {
         $manager = $this->managerRegistry?->getManagerForClass($entityClass);
-        if ($manager === null) {
+        if (null === $manager) {
             return;
         }
 
@@ -92,15 +94,15 @@ final readonly class ElasticParameterTranslator implements ParameterTranslatorIn
                 }];
 
             if (array_key_exists($field, $facetColumns)) {
-                $parameters['facetFields'][$field] = $isText ? $field . '.keyword' : $field;
+                $parameters['facetFields'][$field] = $isText ? $field.'.keyword' : $field;
             }
             if (array_key_exists($field, $sortColumns)) {
-                $parameters['sortFields'][$field] = $isText ? $field . '.keyword' : $field;
+                $parameters['sortFields'][$field] = $isText ? $field.'.keyword' : $field;
             }
         }
 
-        if ($parameters['searchFields'] === []) {
-            $parameters['searchFields'] = array_keys(array_filter($parameters['mappings'], static fn (array $mapping): bool => $mapping['type'] === 'text'));
+        if ([] === $parameters['searchFields']) {
+            $parameters['searchFields'] = array_keys(array_filter($parameters['mappings'], static fn (array $mapping): bool => 'text' === $mapping['type']));
         }
 
         $parameters['index'] ??= strtolower($metadata->getTableName());
@@ -119,6 +121,7 @@ final readonly class ElasticParameterTranslator implements ParameterTranslatorIn
      * Elasticsearch field name has no table alias.
      *
      * @param array<int|string, mixed> $fields
+     *
      * @return list<string>
      */
     private function plainFields(array $fields): array

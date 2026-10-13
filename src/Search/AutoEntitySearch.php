@@ -24,7 +24,8 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
         private readonly string $entityClass,
         private readonly array $fieldNames,
         private readonly ?string $adapterName = null,
-    ) {}
+    ) {
+    }
 
     public function getAdapterName(): ?string
     {
@@ -104,7 +105,7 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
 
         foreach ($sortable as $field) {
             $label = ucwords(str_replace('_', ' ', (new UnicodeString($field))->snake()->toString()));
-            $sortKey = $columnPrefix === null ? $field : $columnPrefix . $field;
+            $sortKey = null === $columnPrefix ? $field : $columnPrefix.$field;
             if (!isset($existingSorts["{$sortKey}:asc"])) {
                 $this->addAvailableSort("{$sortKey}:asc", "{$label} A-Z");
             }
@@ -117,7 +118,7 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
             $this->setAdapterParameters($adapterParameters);
         }
 
-        if ($searchable !== []) {
+        if ([] !== $searchable) {
             // Always write the neutral 'searchFields'. Mapping it to whatever key the engine
             // wants -- DoctrineAdapter::SEARCH_FIELDS, or column expressions for DBAL -- is the
             // translator's job now.
@@ -126,7 +127,7 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
             $existing = $adapterParameters['searchFields'] ?? [];
             $adapterParameters['searchFields'] = array_values(array_unique(array_merge(
                 $existing,
-                array_map(static fn (string $f): string => $prefix . $f, $searchable),
+                array_map(static fn (string $f): string => $prefix.$f, $searchable),
             )));
             $this->setAdapterParameters($adapterParameters);
         }
@@ -156,13 +157,13 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
             foreach ($prop->getAttributes(Column::class) as $attr) {
                 $col = $attr->newInstance();
                 $type = $col->type ?? null;
-                if ($type !== null && in_array($type, $unfacetableTypes, true)) {
+                if (null !== $type && in_array($type, $unfacetableTypes, true)) {
                     $skip[$prop->getName()] = true;
                     continue 2;
                 }
             }
             $nativeType = $prop->getType();
-            if ($nativeType instanceof \ReflectionNamedType && $nativeType->getName() === 'bool') {
+            if ($nativeType instanceof \ReflectionNamedType && 'bool' === $nativeType->getName()) {
                 $skip[$prop->getName()] = true;
             }
         }

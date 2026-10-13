@@ -153,14 +153,7 @@ final readonly class ElasticIndexNameResolver
     private function normalisedPrefix(): string
     {
         if (null === $this->prefix) {
-            throw new \LogicException(
-                'No Elasticsearch index prefix is configured. Without one this app writes bare '
-                .'index names (`article`, `song`) into a cluster namespace shared by every other '
-                .'app pointed at the same node, so two apps can silently end up writing the same '
-                .'index with incompatible mappings. Set survos_search.index_prefix — it defaults '
-                .'to %env(default::MEILI_PREFIX)%, so setting MEILI_PREFIX is usually enough. '
-                .'To share the namespace deliberately, set it to an empty string.',
-            );
+            throw new \LogicException('No Elasticsearch index prefix is configured. Without one this app writes bare index names (`article`, `song`) into a cluster namespace shared by every other app pointed at the same node, so two apps can silently end up writing the same index with incompatible mappings. Set survos_search.index_prefix — it defaults to %env(default::MEILI_PREFIX)%, so setting MEILI_PREFIX is usually enough. To share the namespace deliberately, set it to an empty string.');
         }
 
         $prefix = strtolower(trim($this->prefix));

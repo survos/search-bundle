@@ -13,7 +13,9 @@ use Psr\Log\LoggerInterface;
  */
 final class RedactingLogger extends AbstractLogger
 {
-    public function __construct(private readonly LoggerInterface $inner) {}
+    public function __construct(private readonly LoggerInterface $inner)
+    {
+    }
 
     public function log($level, string|\Stringable $message, array $context = []): void
     {

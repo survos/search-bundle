@@ -13,8 +13,9 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Twig\Components;
 
-use Survos\SearchBundle\Search\AbstractSearch;
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Context\ContextProvider;
+use Survos\SearchBundle\Search\AbstractSearch;
 use Survos\SearchBundle\Search\Filter\RangeFilter;
 use Survos\SearchBundle\Search\Filter\TermFilter;
 use Survos\SearchBundle\Search\Query;
@@ -26,7 +27,6 @@ use Survos\SearchBundle\Search\Url\CurrentRequest;
 use Survos\SearchBundle\Search\Url\UrlFormaterInterface;
 use Survos\SearchBundle\Search\Url\UrlFormaterProvider;
 use Survos\SearchBundle\Twig\Components\Layout;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\PropertyInfo\Extractor\ReflectionExtractor;
@@ -54,7 +54,6 @@ final class LayoutUrlRewritingTest extends TestCase
             self::assertNotSame('ux-search:url:update', $event[0]);
         }
     }
-
 
     public function testInitialQuerySeedsPublicQueryState(): void
     {

@@ -11,7 +11,6 @@ use Survos\Kit\AbstractUxBundle;
 use Survos\Kit\SurvosKitBundle;
 use Survos\Kit\Traits\HasConfigurableRoutes;
 use Survos\SearchBundle\Adapter\AdapterFactoryInterface;
-use Survos\SearchBundle\Adapter\AdapterProvider;
 use Survos\SearchBundle\Adapter\Elasticsearch\ElasticsearchFactory;
 use Survos\SearchBundle\Adapter\Elasticsearch\ElasticsearchQueryBuilder;
 use Survos\SearchBundle\Adapter\PostgresBm25\PostgresBm25Factory;
@@ -33,8 +32,8 @@ use Survos\SearchBundle\Service\DbalParameterTranslator;
 use Survos\SearchBundle\Service\DoctrineParameterTranslator;
 use Survos\SearchBundle\Service\ElasticIndexNameResolver;
 use Survos\SearchBundle\Service\ElasticParameterTranslator;
-use Survos\SearchBundle\Service\ParameterTranslatorInterface;
 use Survos\SearchBundle\Service\FieldSearchConfigurator;
+use Survos\SearchBundle\Service\ParameterTranslatorInterface;
 use Survos\SearchBundle\Twig\SearchExtension;
 use Symfony\Component\AssetMapper\AssetMapperInterface;
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
@@ -77,10 +76,10 @@ final class SurvosSearchBundle extends AbstractUxBundle
             ->scalarNode('index_prefix')
                 ->defaultValue('%env(default::MEILI_PREFIX)%')
                 ->info('Prefix applied to every Elasticsearch index name, once, by '
-                    . 'ElasticIndexNameResolver. Reuses MEILI_PREFIX so one app has one index '
-                    . 'namespace across both engines. Leaving it unset is an error the first time '
-                    . 'a name is resolved: bare index names share a flat cluster namespace with '
-                    . 'every other app on the node. Set it to an empty string to share deliberately.')
+                    .'ElasticIndexNameResolver. Reuses MEILI_PREFIX so one app has one index '
+                    .'namespace across both engines. Leaving it unset is an error the first time '
+                    .'a name is resolved: bare index names share a flat cluster namespace with '
+                    .'every other app on the node. Set it to an empty string to share deliberately.')
             ->end()
             ->arrayNode('adapters')
                 ->normalizeKeys(false)
@@ -129,8 +128,8 @@ final class SurvosSearchBundle extends AbstractUxBundle
         $builder->registerForAutoconfiguration(UrlFormaterInterface::class)->addTag('survos_search.url_formater');
 
         $services = $container->services()->defaults()->autowire()->autoconfigure();
-        $services->set(\Survos\SearchBundle\Http\InstantSearchGateway::class)->arg('$allowedSearches', $config['public_searches']);
-        $services->set(\Survos\SearchBundle\Controller\InstantSearchController::class)->tag('controller.service_arguments');
+        $services->set(Http\InstantSearchGateway::class)->arg('$allowedSearches', $config['public_searches']);
+        $services->set(Controller\InstantSearchController::class)->tag('controller.service_arguments');
         $services
             ->set(FieldSearchConfigurator::class)
                 ->arg('$defaultHitsPerPage', $config['default_hits_per_page'])

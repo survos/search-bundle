@@ -23,7 +23,9 @@ use Survos\SearchBundle\Search\SearchInterface;
  */
 final readonly class DbalParameterTranslator implements ParameterTranslatorInterface
 {
-    public function __construct(private ?ManagerRegistry $managerRegistry = null) {}
+    public function __construct(private ?ManagerRegistry $managerRegistry = null)
+    {
+    }
 
     public function supports(AdapterInterface $adapter): bool
     {
@@ -39,7 +41,7 @@ final readonly class DbalParameterTranslator implements ParameterTranslatorInter
     public function translate(SearchInterface $search, string $entityClass, AdapterInterface $adapter): void
     {
         $manager = $this->managerRegistry?->getManagerForClass($entityClass);
-        if ($manager === null) {
+        if (null === $manager) {
             return;
         }
 
@@ -57,11 +59,7 @@ final readonly class DbalParameterTranslator implements ParameterTranslatorInter
         foreach ($search->getFacets() as $facet) {
             $property = $facet->getProperty();
             if (!isset($columnForField[$property]) && !isset($parameters['facetColumns'][$property])) {
-                throw new \LogicException(sprintf(
-                    'Cannot configure DBAL search facet "%s" for %s: no Doctrine field mapping exists.',
-                    $property,
-                    $entityClass,
-                ));
+                throw new \LogicException(sprintf('Cannot configure DBAL search facet "%s" for %s: no Doctrine field mapping exists.', $property, $entityClass));
             }
 
             // Multi-valued facets are allowed through by the field layer because engines that
@@ -70,14 +68,7 @@ final readonly class DbalParameterTranslator implements ParameterTranslatorInter
             // Fail loudly rather than produce facets that look plausible and are wrong.
             $fieldType = isset($columnForField[$property]) ? $metadata->getTypeOfField($property) : null;
             if (in_array($fieldType, ['json', 'jsonb', 'array', 'simple_array'], true)) {
-                throw new \LogicException(sprintf(
-                    'Cannot facet "%s" on %s with a DBAL adapter: it is a "%s" column, and GROUP BY would '
-                    . 'bucket the whole serialized array rather than each element. Use the Elasticsearch '
-                    . 'adapter for multi-valued facets, or remove it from FILTERABLE_FIELDS.',
-                    $property,
-                    $entityClass,
-                    $fieldType,
-                ));
+                throw new \LogicException(sprintf('Cannot facet "%s" on %s with a DBAL adapter: it is a "%s" column, and GROUP BY would bucket the whole serialized array rather than each element. Use the Elasticsearch adapter for multi-valued facets, or remove it from FILTERABLE_FIELDS.', $property, $entityClass, $fieldType));
             }
 
             $parameters['facetColumns'][$property] ??= $property;
@@ -94,7 +85,7 @@ final readonly class DbalParameterTranslator implements ParameterTranslatorInter
         ];
 
         if ($adapter instanceof SqliteFts5Adapter) {
-            $parameters += ['ftsTable' => $table . '_fts'];
+            $parameters += ['ftsTable' => $table.'_fts'];
         }
         if ($adapter instanceof PostgresBm25Adapter) {
             $vector = $this->postgresVectorExpression($parameters['searchFields'] ?? [], $manager->getConnection());
@@ -109,7 +100,8 @@ final readonly class DbalParameterTranslator implements ParameterTranslatorInter
 
     /**
      * @param array<int|string, mixed> $fields
-     * @param array<string, string> $columnForField
+     * @param array<string, string>    $columnForField
+     *
      * @return list<string>
      */
     private function mapFieldList(array $fields, array $columnForField): array
@@ -125,8 +117,9 @@ final readonly class DbalParameterTranslator implements ParameterTranslatorInter
     }
 
     /**
-     * @param array<string, mixed> $columns
+     * @param array<string, mixed>  $columns
      * @param array<string, string> $columnForField
+     *
      * @return array<string, string>
      */
     private function mapFieldColumns(array $columns, array $columnForField): array
@@ -138,7 +131,7 @@ final readonly class DbalParameterTranslator implements ParameterTranslatorInter
             }
             $mapped[$property] = is_string($column)
                 ? $this->dbalColumnExpression($column, $columnForField)
-                : 'd.' . ($columnForField[$property] ?? $property);
+                : 'd.'.($columnForField[$property] ?? $property);
         }
 
         return $mapped;
@@ -150,7 +143,7 @@ final readonly class DbalParameterTranslator implements ParameterTranslatorInter
         $field = str_starts_with($expression, 'd.') ? substr($expression, 2) : $expression;
         $field = str_starts_with($field, 'o.') ? substr($field, 2) : $field;
 
-        return isset($columnForField[$field]) ? 'd.' . $columnForField[$field] : $expression;
+        return isset($columnForField[$field]) ? 'd.'.$columnForField[$field] : $expression;
     }
 
     /** @param string[] $fields */
@@ -158,16 +151,16 @@ final readonly class DbalParameterTranslator implements ParameterTranslatorInter
     {
         $expressions = [];
         foreach ($fields as $field) {
-            if (!is_string($field) || $field === '') {
+            if (!is_string($field) || '' === $field) {
                 continue;
             }
             $column = preg_replace('/^[a-z]+\./', '', $field) ?? $field;
             $expressions[] = sprintf(
                 "to_tsvector('english', coalesce(%s::text, ''))",
-                'd.' . $connection->quoteSingleIdentifier($column),
+                'd.'.$connection->quoteSingleIdentifier($column),
             );
         }
 
-        return $expressions === [] ? "to_tsvector('english', '')" : implode(' || ', $expressions);
+        return [] === $expressions ? "to_tsvector('english', '')" : implode(' || ', $expressions);
     }
 }

@@ -19,13 +19,13 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\ORMSetup;
 use Doctrine\ORM\Tools\SchemaTool;
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Adapter\Doctrine\DoctrineAdapter;
 use Survos\SearchBundle\Search\Query;
 use Survos\SearchBundle\Search\SearchInterface;
 use Survos\SearchBundle\Tests\Fixtures\Adapter\Doctrine\Bar;
 use Survos\SearchBundle\Tests\Fixtures\Adapter\Doctrine\Foo;
 use Survos\SearchBundle\Tests\Fixtures\Adapter\Doctrine\FooSearch;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 abstract class AbstractDoctrineTestCase extends TestCase

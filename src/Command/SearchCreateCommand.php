@@ -17,7 +17,9 @@ use function Symfony\Component\String\u;
 #[AsCommand('survos:search:create')]
 final class SearchCreateCommand
 {
-    public function __construct(private readonly string $projectDir) {}
+    public function __construct(private readonly string $projectDir)
+    {
+    }
 
     public function __invoke(
         SymfonyStyle $io,
@@ -30,31 +32,34 @@ final class SearchCreateCommand
     ): int {
         if (!class_exists($fieldClass)) {
             $io->error(sprintf('Class "%s" does not exist or is not autoloadable.', $fieldClass));
+
             return Command::FAILURE;
         }
 
         $short = (new \ReflectionClass($fieldClass))->getShortName();
-        $className = $name ? u($name)->camel()->title()->toString() : $short . 'Search';
+        $className = $name ? u($name)->camel()->title()->toString() : $short.'Search';
         if (!str_ends_with($className, 'Search')) {
             $className .= 'Search';
         }
 
-        $targetDir = rtrim($this->projectDir . '/' . trim($dir, '/'), '/');
+        $targetDir = rtrim($this->projectDir.'/'.trim($dir, '/'), '/');
         if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
             $io->error(sprintf('Could not create "%s".', $targetDir));
+
             return Command::FAILURE;
         }
 
-        $target = $targetDir . '/' . $className . '.php';
+        $target = $targetDir.'/'.$className.'.php';
         if (file_exists($target)) {
             $io->error(sprintf('File already exists: %s', $target));
+
             return Command::FAILURE;
         }
 
         $fieldShort = $this->shortClass($fieldClass);
         $asSearchClass = $this->fqcn(AsSearch::class);
         $abstractFieldSearchClass = $this->fqcn(AbstractFieldSearch::class);
-        $indexCode = $index === null ? $fieldShort . '::class' : var_export($index, true);
+        $indexCode = null === $index ? $fieldShort.'::class' : var_export($index, true);
         $contents = <<<PHP
 <?php
 

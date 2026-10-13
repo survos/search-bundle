@@ -13,8 +13,8 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Search\Url;
 
-use Survos\SearchBundle\Search\Url\CurrentRequest;
 use PHPUnit\Framework\TestCase;
+use Survos\SearchBundle\Search\Url\CurrentRequest;
 use Symfony\Component\HttpFoundation\Request;
 
 class CurrentRequestTest extends TestCase

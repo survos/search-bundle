@@ -225,11 +225,11 @@ readonly class QueryBuilderHelper
             $resolver = $this->search->getResolvedAdapterParameter(DoctrineAdapter::MULTI_VALUE_FACETS)[$filter->getProperty()];
             $ids = [];
             foreach ($resolver($this->createBaseQueryBuilder()) as $id => $values) {
-                if (array_intersect($filter->getValues(), $values) !== []) {
+                if ([] !== array_intersect($filter->getValues(), $values)) {
                     $ids[] = $id;
                 }
             }
-            if ($ids === []) {
+            if ([] === $ids) {
                 $qb->andWhere('1 = 0');
             } else {
                 $parameter = 'multi_'.md5($filter->getProperty());

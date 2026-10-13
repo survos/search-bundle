@@ -13,12 +13,12 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Search;
 
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Exception\SearchException;
 use Survos\SearchBundle\Search\AbstractSearch;
 use Survos\SearchBundle\Search\Facet;
 use Survos\SearchBundle\Search\Url\DefaultUrlFormater;
 use Survos\SearchBundle\Tests\Fixtures\Attribute\TestClass;
-use PHPUnit\Framework\TestCase;
 
 class AbstractSearchTest extends TestCase
 {

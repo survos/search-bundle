@@ -13,11 +13,11 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Adapter;
 
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Adapter\AdapterFactoryInterface;
 use Survos\SearchBundle\Adapter\AdapterInterface;
 use Survos\SearchBundle\Adapter\AdapterProvider;
 use Survos\SearchBundle\Exception\AdapterException;
-use PHPUnit\Framework\TestCase;
 
 class AdapterProviderTest extends TestCase
 {

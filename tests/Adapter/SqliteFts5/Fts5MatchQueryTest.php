@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Adapter\SqliteFts5;
 
-use PDO;
-use PDOException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Adapter\SqliteFts5\Fts5MatchQuery;
@@ -86,7 +84,7 @@ final class Fts5MatchQueryTest extends TestCase
         $pdo = self::fts5Connection();
         $match = Fts5MatchQuery::build($input);
 
-        if ($match === '') {
+        if ('' === $match) {
             $this->expectNotToPerformAssertions();
 
             return; // empty => caller skips FTS entirely
@@ -96,7 +94,7 @@ final class Fts5MatchQueryTest extends TestCase
             $stmt = $pdo->prepare('SELECT count(*) FROM t WHERE t MATCH :m');
             $stmt->execute(['m' => $match]);
             $stmt->fetchColumn();
-        } catch (PDOException $e) {
+        } catch (\PDOException $e) {
             self::fail(sprintf('Input %s produced invalid FTS5 %s: %s', var_export($input, true), var_export($match, true), $e->getMessage()));
         }
 
@@ -139,23 +137,23 @@ final class Fts5MatchQueryTest extends TestCase
 
         $stmt = $pdo->prepare('SELECT rowid FROM t WHERE t MATCH :m ORDER BY rowid');
         $stmt->execute(['m' => $match]);
-        $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $rows = $stmt->fetchAll(\PDO::FETCH_COLUMN);
 
         self::assertSame([1], array_map('intval', $rows), 'only plain-chess row 1 should survive');
     }
 
-    private static function fts5Connection(): PDO
+    private static function fts5Connection(): \PDO
     {
-        if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+        if (!in_array('sqlite', \PDO::getAvailableDrivers(), true)) {
             self::markTestSkipped('pdo_sqlite is not available');
         }
 
-        $pdo = new PDO('sqlite::memory:');
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo = new \PDO('sqlite::memory:');
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 
         try {
             $pdo->exec('CREATE VIRTUAL TABLE t USING fts5(b)');
-        } catch (PDOException) {
+        } catch (\PDOException) {
             self::markTestSkipped('SQLite FTS5 extension is not available');
         }
 

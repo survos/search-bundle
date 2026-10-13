@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Menu;
 
-use Survos\FieldBundle\Registry\EntityMetaRegistry;
 use Survos\SearchBundle\Registry\UxSearchRegistry;
 use Survos\TablerBundle\Event\MenuEvent;
 use Survos\TablerBundle\Menu\AbstractAdminMenuSubscriber;
@@ -24,19 +23,30 @@ class SearchMenuSubscriber extends AbstractAdminMenuSubscriber
         parent::__construct($router, $routeAliasService, $iconService);
     }
 
-    protected function getLabel(): string { return 'Search'; }
-    protected function getBrowseRoute(): ?string { return null; }
-    protected function getResourceClasses(): array { return []; }
+    protected function getLabel(): string
+    {
+        return 'Search';
+    }
+
+    protected function getBrowseRoute(): ?string
+    {
+        return null;
+    }
+
+    protected function getResourceClasses(): array
+    {
+        return [];
+    }
 
     #[AsEventListener(event: MenuEvent::ADMIN_NAVBAR_MENU)]
     public function onAdminNavbarMenu(MenuEvent $event): void
     {
         $searches = $this->searchRegistry->all();
-        if ($searches === []) {
+        if ([] === $searches) {
             return;
         }
 
-        $menu    = $event->getMenu();
+        $menu = $event->getMenu();
         $submenu = $this->addSubmenu($menu, $this->getLabel());
 
         foreach ($searches as $descriptor) {

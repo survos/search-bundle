@@ -14,9 +14,9 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Adapter\Meilisearch;
 
 use Meilisearch\Client;
+use Psr\Http\Client\ClientInterface;
 use Survos\SearchBundle\Adapter\AdapterFactoryInterface;
 use Survos\SearchBundle\Adapter\AdapterInterface;
-use Psr\Http\Client\ClientInterface;
 
 readonly class MeilisearchFactory implements AdapterFactoryInterface
 {

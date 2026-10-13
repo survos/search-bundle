@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Adapter\Elasticsearch;
 
-use Survos\SearchBundle\Search\Query;
-use Survos\SearchBundle\Search\SearchInterface;
 use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Adapter\Elasticsearch\ElasticsearchQueryBuilder;
+use Survos\SearchBundle\Search\Query;
+use Survos\SearchBundle\Search\SearchInterface;
 
 final class ElasticsearchQueryBuilderTest extends TestCase
 {
@@ -58,7 +58,7 @@ final class ElasticsearchQueryBuilderTest extends TestCase
 
         $body = (new ElasticsearchQueryBuilder())->build($query, $this->search([
             'retrievalMode' => 'hybrid',
-            'queryVector' => static fn (string $text): array => $text === '' ? [] : [1.0, 0.0],
+            'queryVector' => static fn (string $text): array => '' === $text ? [] : [1.0, 0.0],
         ]));
 
         $retrievers = $body['retriever']['rrf']['retrievers'];

@@ -48,30 +48,30 @@ final class Fts5MatchQuery
         $stack = [[]];
 
         foreach ($tokens as $token) {
-            if ($token === '(') {
+            if ('(' === $token) {
                 $stack[] = [];
                 continue;
             }
 
-            if ($token === ')') {
-                if (count($stack) === 1) {
+            if (')' === $token) {
+                if (1 === count($stack)) {
                     continue; // unmatched ) — drop it
                 }
                 $inner = self::closeGroup(array_pop($stack));
-                if ($inner !== null) {
-                    self::pushOperand($stack, '(' . $inner . ')');
+                if (null !== $inner) {
+                    self::pushOperand($stack, '('.$inner.')');
                 }
                 continue;
             }
 
             $operator = self::matchOperator($token);
-            if ($operator !== null) {
+            if (null !== $operator) {
                 $i = count($stack) - 1;
-                $lastType = $stack[$i] === [] ? null : end($stack[$i])['type'];
-                if ($lastType === 'operand') {
+                $lastType = [] === $stack[$i] ? null : end($stack[$i])['type'];
+                if ('operand' === $lastType) {
                     // Normal case: operator with a left operand.
                     $stack[$i][] = ['type' => 'op', 'sql' => $operator];
-                } elseif ($lastType === 'op' && $operator === 'NOT') {
+                } elseif ('op' === $lastType && 'NOT' === $operator) {
                     // Collapse a doubled operator ending in NOT ("and not",
                     // "or not") into the stronger NOT — FTS5 has no "AND NOT".
                     $stack[$i][array_key_last($stack[$i])]['sql'] = 'NOT';
@@ -89,18 +89,18 @@ final class Fts5MatchQuery
 
             // Strip stray quotes; the tokenizer ignores them inside a phrase anyway.
             $term = str_replace('"', '', $token);
-            if ($term === '') {
+            if ('' === $term) {
                 continue;
             }
 
-            self::pushOperand($stack, '"' . $term . '"' . $prefix);
+            self::pushOperand($stack, '"'.$term.'"'.$prefix);
         }
 
         // Close any groups left open by an unbalanced `(`.
         while (count($stack) > 1) {
             $inner = self::closeGroup(array_pop($stack));
-            if ($inner !== null) {
-                self::pushOperand($stack, '(' . $inner . ')');
+            if (null !== $inner) {
+                self::pushOperand($stack, '('.$inner.')');
             }
         }
 
@@ -129,7 +129,7 @@ final class Fts5MatchQuery
     private static function pushOperand(array &$stack, string $sql): void
     {
         $i = count($stack) - 1;
-        if ($stack[$i] !== [] && end($stack[$i])['type'] === 'operand') {
+        if ([] !== $stack[$i] && 'operand' === end($stack[$i])['type']) {
             $stack[$i][] = ['type' => 'op', 'sql' => 'AND'];
         }
         $stack[$i][] = ['type' => 'operand', 'sql' => $sql];
@@ -150,10 +150,10 @@ final class Fts5MatchQuery
      */
     private static function closeGroup(array $group): ?string
     {
-        while ($group !== [] && end($group)['type'] === 'op') {
+        while ([] !== $group && 'op' === end($group)['type']) {
             array_pop($group);
         }
-        if ($group === []) {
+        if ([] === $group) {
             return null;
         }
 

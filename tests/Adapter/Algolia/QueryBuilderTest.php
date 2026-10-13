@@ -13,12 +13,12 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Adapter\Algolia;
 
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Adapter\Algolia\QueryBuilder;
 use Survos\SearchBundle\Search\Filter\RangeFilter;
 use Survos\SearchBundle\Search\Filter\TermFilter;
 use Survos\SearchBundle\Search\Query;
 use Survos\SearchBundle\Search\SearchInterface;
-use PHPUnit\Framework\TestCase;
 
 class QueryBuilderTest extends TestCase
 {

@@ -14,6 +14,8 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Tests\Adapter\Meilisearch;
 
 use Meilisearch\Contracts\SearchQuery;
+use PHPUnit\Framework\MockObject\Exception;
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Adapter\Meilisearch\MeilisearchAdapter;
 use Survos\SearchBundle\Adapter\Meilisearch\QueryBuilder;
 use Survos\SearchBundle\Search\Facet;
@@ -21,8 +23,6 @@ use Survos\SearchBundle\Search\Filter\RangeFilter;
 use Survos\SearchBundle\Search\Filter\TermFilter;
 use Survos\SearchBundle\Search\Query;
 use Survos\SearchBundle\Search\SearchInterface;
-use PHPUnit\Framework\MockObject\Exception;
-use PHPUnit\Framework\TestCase;
 
 class QueryBuilderTest extends TestCase
 {

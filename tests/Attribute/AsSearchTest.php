@@ -13,10 +13,10 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Attribute;
 
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Attribute\AsSearch;
 use Survos\SearchBundle\Tests\Fixtures\Attribute\TestClass;
 use Survos\SearchBundle\Tests\Fixtures\Attribute\TestClassWithoutName;
-use PHPUnit\Framework\TestCase;
 
 class AsSearchTest extends TestCase
 {

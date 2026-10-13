@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Adapter\Elasticsearch;
 
+use Survos\SearchBundle\Contract\EmbeddingProviderInterface;
 use Survos\SearchBundle\Search\Filter\RangeFilter;
 use Survos\SearchBundle\Search\Filter\TermFilter;
 use Survos\SearchBundle\Search\Query;
 use Survos\SearchBundle\Search\SearchInterface;
-use Survos\SearchBundle\Contract\EmbeddingProviderInterface;
 
 final readonly class ElasticsearchQueryBuilder
 {
@@ -27,7 +27,7 @@ final readonly class ElasticsearchQueryBuilder
         ];
 
         $sourceFields = $search->getResolvedAdapterParameter('sourceFields');
-        if ($sourceFields !== []) {
+        if ([] !== $sourceFields) {
             $body['_source'] = $sourceFields;
         }
 
@@ -41,16 +41,16 @@ final readonly class ElasticsearchQueryBuilder
             $body['explain'] = true;
         }
 
-        if ($mode === 'lexical' || $queryString === '') {
+        if ('lexical' === $mode || '' === $queryString) {
             $body['query'] = $this->lexicalQuery($queryString, $search, []);
-            if ($filters !== []) {
+            if ([] !== $filters) {
                 $body['post_filter'] = ['bool' => ['filter' => $filters]];
             }
             $sort = $this->sort($query, $search);
-            if ($sort !== []) {
+            if ([] !== $sort) {
                 $body['sort'] = $sort;
             }
-        } elseif ($mode === 'vector') {
+        } elseif ('vector' === $mode) {
             $vector = $this->queryVector($queryString, $search);
             $body['retriever'] = ['knn' => $this->knn($vector, $search, $filters)];
         } else {
@@ -72,7 +72,7 @@ final readonly class ElasticsearchQueryBuilder
             $property = $facet->getProperty();
             $field = $search->getResolvedAdapterParameter('facetFields')[$property] ?? $property;
             $values = ['terms' => ['field' => $field, 'size' => $search->getResolvedAdapterParameter('maxFacetValues')]];
-            $scoped = $mode === 'lexical' || $queryString === '';
+            $scoped = 'lexical' === $mode || '' === $queryString;
             $aggs[$property] = $scoped
                 ? ['filter' => ['bool' => ['filter' => $this->filters($query, $search, $property)]], 'aggs' => ['values' => $values]]
                 : $values;
@@ -84,11 +84,11 @@ final readonly class ElasticsearchQueryBuilder
                 if ($scoped) {
                     $aggs[$property]['aggs']['stats'] = ['stats' => ['field' => $field]];
                 } else {
-                    $aggs[$property . '__stats'] = ['stats' => ['field' => $field]];
+                    $aggs[$property.'__stats'] = ['stats' => ['field' => $field]];
                 }
             }
         }
-        if ($aggs !== []) {
+        if ([] !== $aggs) {
             $body['aggs'] = $aggs;
         }
 
@@ -96,11 +96,11 @@ final readonly class ElasticsearchQueryBuilder
     }
 
     /** @param list<array<string, mixed>> $filters
-     *  @return array<string, mixed>
+     * @return array<string, mixed>
      */
     private function lexicalQuery(string $query, SearchInterface $search, array $filters): array
     {
-        if ($query === '') {
+        if ('' === $query) {
             return ['bool' => ['must' => [['match_all' => new \stdClass()]], 'filter' => $filters]];
         }
         $fields = $search->getResolvedAdapterParameter('searchFields');
@@ -116,13 +116,14 @@ final readonly class ElasticsearchQueryBuilder
         if ($search->getResolvedAdapterParameter('prefixSearch')) {
             $clauses[] = ['multi_match' => ['query' => $query, 'fields' => $fields, 'type' => 'bool_prefix', 'operator' => 'and', 'boost' => 2]];
         }
+
         return ['bool' => ['must' => [['dis_max' => ['queries' => $clauses]]], 'filter' => $filters]];
     }
 
     /** @return list<float> */
     private function queryVector(string $query, SearchInterface $search): array
     {
-        if ($query === '' || $search->getResolvedAdapterParameter('retrievalMode') === 'lexical') {
+        if ('' === $query || 'lexical' === $search->getResolvedAdapterParameter('retrievalMode')) {
             return [];
         }
 
@@ -130,13 +131,13 @@ final readonly class ElasticsearchQueryBuilder
         if (is_callable($vector)) {
             $vector = $vector($query);
         }
-        if ($vector === null) {
+        if (null === $vector) {
             $provider = $search->getResolvedAdapterParameter('embeddingProvider');
             $vector = $provider instanceof EmbeddingProviderInterface
                 ? $provider->embed($query)
                 : (is_callable($provider) ? $provider($query) : null);
         }
-        if (!is_array($vector) || $vector === []) {
+        if (!is_array($vector) || [] === $vector) {
             throw new \LogicException('Vector and hybrid retrieval require a queryVector array or callable.');
         }
 
@@ -144,8 +145,9 @@ final readonly class ElasticsearchQueryBuilder
     }
 
     /** @param list<float> $vector
-     *  @param list<array<string, mixed>> $filters
-     *  @return array<string, mixed>
+     * @param list<array<string, mixed>> $filters
+     *
+     * @return array<string, mixed>
      */
     private function knn(array $vector, SearchInterface $search, array $filters): array
     {
@@ -155,7 +157,7 @@ final readonly class ElasticsearchQueryBuilder
             'k' => $search->getResolvedAdapterParameter('k'),
             'num_candidates' => $search->getResolvedAdapterParameter('numCandidates'),
         ];
-        if ($filters !== []) {
+        if ([] !== $filters) {
             $knn['filter'] = ['bool' => ['filter' => $filters]];
         }
 
@@ -168,17 +170,19 @@ final readonly class ElasticsearchQueryBuilder
         $filters = [];
         $facetFields = $search->getResolvedAdapterParameter('facetFields');
         foreach ($query->getActiveFilters() as $filter) {
-            if ($filter->getProperty() === $except) { continue; }
+            if ($filter->getProperty() === $except) {
+                continue;
+            }
             $field = $facetFields[$filter->getProperty()] ?? $filter->getProperty();
-            if ($filter instanceof TermFilter && $filter->getValues() !== []) {
+            if ($filter instanceof TermFilter && [] !== $filter->getValues()) {
                 $filters[] = ['terms' => [$field => array_values($filter->getValues())]];
             }
             if ($filter instanceof RangeFilter) {
                 $range = array_filter(
                     ['gte' => $filter->getMin(), 'lte' => $filter->getMax()],
-                    static fn (mixed $value): bool => $value !== null,
+                    static fn (mixed $value): bool => null !== $value,
                 );
-                if ($range !== []) {
+                if ([] !== $range) {
                     $filters[] = ['range' => [$field => $range]];
                 }
             }
@@ -192,10 +196,10 @@ final readonly class ElasticsearchQueryBuilder
     {
         $id = $search->getResolvedAdapterParameter('idField');
         $mapping = $search->getResolvedAdapterParameter('mappings')[$id] ?? [];
-        $idSort = $mapping === [] ? null : (($mapping['type'] ?? null) === 'text' ? $id.'.keyword' : $id);
+        $idSort = [] === $mapping ? null : (($mapping['type'] ?? null) === 'text' ? $id.'.keyword' : $id);
         $activeSort = $query->getActiveSort();
         if (!is_string($activeSort) || !str_contains($activeSort, ':')) {
-            return $idSort === null ? [] : [['_score' => 'desc'], [$idSort => ['order' => 'asc']]];
+            return null === $idSort ? [] : [['_score' => 'desc'], [$idSort => ['order' => 'asc']]];
         }
         [$property, $direction] = explode(':', $activeSort, 2);
         $field = $search->getResolvedAdapterParameter('sortFields')[$property] ?? null;
@@ -205,7 +209,10 @@ final readonly class ElasticsearchQueryBuilder
         }
 
         $sort = [[$field => ['order' => $direction, 'missing' => '_last']]];
-        if ($idSort !== null && $idSort !== $field) { $sort[] = [$idSort => ['order' => 'asc']]; }
+        if (null !== $idSort && $idSort !== $field) {
+            $sort[] = [$idSort => ['order' => 'asc']];
+        }
+
         return $sort;
     }
 }

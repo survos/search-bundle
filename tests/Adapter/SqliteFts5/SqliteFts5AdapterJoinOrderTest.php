@@ -30,7 +30,9 @@ final class SqliteFts5AdapterJoinOrderTest extends TestCase
     protected function setUp(): void
     {
         $logger = new class($this->statements) extends AbstractLogger {
-            public function __construct(private array &$sink) {}
+            public function __construct(private array &$sink)
+            {
+            }
 
             public function log($level, \Stringable|string $message, array $context = []): void
             {
@@ -45,7 +47,7 @@ final class SqliteFts5AdapterJoinOrderTest extends TestCase
         $this->connection->executeStatement('CREATE INDEX idx_item_core ON item (core_id)');
         $this->connection->executeStatement("CREATE VIRTUAL TABLE item_fts USING fts5(title, content='item', content_rowid='rowid')");
         foreach (['snap bean crop acreage', 'county fair results', 'snap bean prices', 'school board meeting'] as $i => $title) {
-            $this->connection->insert('item', ['id' => "r$i", 'core_id' => $i === 3 ? 'other' : 'article', 'title' => $title]);
+            $this->connection->insert('item', ['id' => "r$i", 'core_id' => 3 === $i ? 'other' : 'article', 'title' => $title]);
         }
         $this->connection->executeStatement("INSERT INTO item_fts(item_fts) VALUES ('rebuild')");
     }
@@ -53,7 +55,9 @@ final class SqliteFts5AdapterJoinOrderTest extends TestCase
     public function testMatchWithARowScopeRunsFtsFirstAndStillFindsTheRows(): void
     {
         $search = new class extends AbstractSearch {
-            public function build(array $options = []): void {}
+            public function build(array $options = []): void
+            {
+            }
         };
         $search->setAdapterParameters([
             'table' => 'item',
@@ -78,8 +82,8 @@ final class SqliteFts5AdapterJoinOrderTest extends TestCase
         self::assertNotEmpty($matching);
         foreach ($matching as ['sql' => $sql, 'params' => $params]) {
             self::assertMatchesRegularExpression('/FROM\s+"?item_fts"?\s+f\s+CROSS JOIN\s+"?item"?\s+d/i', $sql);
-            $plan = $this->connection->fetchAllAssociative('EXPLAIN QUERY PLAN ' . $sql, $params);
-            self::assertStringContainsString('VIRTUAL TABLE', $plan[0]['detail'], 'the FTS table must be the outer loop: ' . json_encode($plan));
+            $plan = $this->connection->fetchAllAssociative('EXPLAIN QUERY PLAN '.$sql, $params);
+            self::assertStringContainsString('VIRTUAL TABLE', $plan[0]['detail'], 'the FTS table must be the outer loop: '.json_encode($plan));
         }
     }
 
@@ -87,7 +91,9 @@ final class SqliteFts5AdapterJoinOrderTest extends TestCase
     private function searchWithout(array $parameters, string $text): \Survos\SearchBundle\Search\ResultSet\ResultSet
     {
         $search = new class extends AbstractSearch {
-            public function build(array $options = []): void {}
+            public function build(array $options = []): void
+            {
+            }
         };
         $search->setAdapterParameters(['table' => 'item', 'selectColumns' => ['d.id', 'd.title']] + $parameters);
         $adapter = new SqliteFts5Adapter($this->connection);

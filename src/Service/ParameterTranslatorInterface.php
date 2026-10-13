@@ -31,9 +31,9 @@ interface ParameterTranslatorInterface
     public function columnPrefix(): ?string;
 
     /**
-     * @param class-string $entityClass the class carrying the metadata, when it is a real class
-     * @param AdapterInterface $adapter the resolved adapter, so an implementation covering more
-     *        than one (FTS5 and BM25) can tell them apart without resolving it again
+     * @param class-string     $entityClass the class carrying the metadata, when it is a real class
+     * @param AdapterInterface $adapter     the resolved adapter, so an implementation covering more
+     *                                      than one (FTS5 and BM25) can tell them apart without resolving it again
      */
     public function translate(SearchInterface $search, string $entityClass, AdapterInterface $adapter): void;
 }

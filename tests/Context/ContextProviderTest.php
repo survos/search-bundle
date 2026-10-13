@@ -13,14 +13,14 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Context;
 
+use PHPUnit\Framework\MockObject\Exception;
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Context\ContextProvider;
 use Survos\SearchBundle\Exception\ContextException;
 use Survos\SearchBundle\Search\Query;
 use Survos\SearchBundle\Search\ResultSet\ResultSet;
 use Survos\SearchBundle\Search\Searcher;
 use Survos\SearchBundle\Search\SearchInterface;
-use PHPUnit\Framework\MockObject\Exception;
-use PHPUnit\Framework\TestCase;
 
 class ContextProviderTest extends TestCase
 {

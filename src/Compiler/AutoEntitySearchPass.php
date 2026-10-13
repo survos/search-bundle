@@ -6,12 +6,11 @@ namespace Survos\SearchBundle\Compiler;
 
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping\Column;
-use Doctrine\Persistence\ManagerRegistry;
-use Survos\SearchBundle\Search\SearchProvider;
 use Survos\FieldBundle\Registry\EntityMetaRegistry;
 use Survos\SearchBundle\Model\UxSearchDescriptor;
 use Survos\SearchBundle\Registry\UxSearchRegistry;
 use Survos\SearchBundle\Search\AutoEntitySearch;
+use Survos\SearchBundle\Search\SearchProvider;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -92,11 +91,11 @@ final class AutoEntitySearchPass implements CompilerPassInterface
             }
 
             $fieldNames = $this->doctrineScalarFields($class);
-            if ($fieldNames === []) {
+            if ([] === $fieldNames) {
                 continue;
             }
 
-            $serviceId = 'survos.search.auto_entity.' . $code;
+            $serviceId = 'survos.search.auto_entity.'.$code;
             $container->setDefinition(
                 $serviceId,
                 (new Definition(AutoEntitySearch::class))
@@ -168,14 +167,13 @@ final class AutoEntitySearchPass implements CompilerPassInterface
         $container->getDefinition(UxSearchRegistry::class)
             ->setArgument('$descriptors', $uxDescriptors);
 
-        if ($newSearches !== [] && $container->hasDefinition(SearchProvider::class)) {
+        if ([] !== $newSearches && $container->hasDefinition(SearchProvider::class)) {
             $providerDef = $container->getDefinition(SearchProvider::class);
             $existingArg = $providerDef->getArgument('$searches');
             $existing = $existingArg instanceof IteratorArgument ? $existingArg->getValues() : [];
             $providerDef->setArgument('$searches', new IteratorArgument(array_merge($existing, $newSearches)));
         }
     }
-
 
     private function hitTemplate(ContainerBuilder $container, string $class, string $code): string
     {
@@ -185,7 +183,7 @@ final class AutoEntitySearchPass implements CompilerPassInterface
 
         foreach (array_unique([$code, $shortCode]) as $candidate) {
             $template = sprintf('search/hits/%s.html.twig', $candidate);
-            if ($projectDir === null || is_file($projectDir . '/templates/' . $template)) {
+            if (null === $projectDir || is_file($projectDir.'/templates/'.$template)) {
                 return $template;
             }
         }
@@ -195,6 +193,7 @@ final class AutoEntitySearchPass implements CompilerPassInterface
 
     /**
      * @param class-string $class
+     *
      * @return string[]
      */
     private function doctrineScalarFields(string $class): array
@@ -202,13 +201,13 @@ final class AutoEntitySearchPass implements CompilerPassInterface
         $fields = [];
         foreach ((new \ReflectionClass($class))->getProperties() as $property) {
             $attributes = $property->getAttributes(Column::class);
-            if ($attributes === []) {
+            if ([] === $attributes) {
                 continue;
             }
 
             $column = $attributes[0]->newInstance();
             $type = $column->type;
-            if ($type === null) {
+            if (null === $type) {
                 $type = $this->phpType($property) ?? Types::STRING;
             }
 

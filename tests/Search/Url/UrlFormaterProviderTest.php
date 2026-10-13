@@ -13,10 +13,10 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Search\Url;
 
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Exception\UrlFormaterException;
 use Survos\SearchBundle\Search\Url\UrlFormaterInterface;
 use Survos\SearchBundle\Search\Url\UrlFormaterProvider;
-use PHPUnit\Framework\TestCase;
 
 final class UrlFormaterProviderTest extends TestCase
 {

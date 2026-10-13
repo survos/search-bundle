@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Adapter\Elasticsearch;
 
-use Survos\SearchBundle\Search\Query;
-use Survos\SearchBundle\Search\SearchInterface;
 use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Adapter\Elasticsearch\ElasticsearchAdapter;
 use Survos\SearchBundle\Adapter\Elasticsearch\ElasticsearchClientInterface;
 use Survos\SearchBundle\Adapter\Elasticsearch\ElasticsearchQueryBuilder;
+use Survos\SearchBundle\Search\Query;
+use Survos\SearchBundle\Search\SearchInterface;
 
 final class ElasticsearchAdapterTest extends TestCase
 {
@@ -45,7 +45,6 @@ final class ElasticsearchAdapterTest extends TestCase
         self::assertSame('survos--json-rpc-bundle', $data['_id']);
     }
 
-
     public function testHybridFallsBackToClientSideRrfOnLicenseError(): void
     {
         $client = $this->createMock(ElasticsearchClientInterface::class);
@@ -53,10 +52,10 @@ final class ElasticsearchAdapterTest extends TestCase
         $client->expects(self::exactly(3))->method('search')
             ->willReturnCallback(static function () use (&$calls): array {
                 ++$calls;
-                if ($calls === 1) {
+                if (1 === $calls) {
                     throw new \RuntimeException('current license is non-compliant for [Reciprocal Rank Fusion (RRF)]');
                 }
-                if ($calls === 2) {
+                if (2 === $calls) {
                     return [
                         'took' => 2,
                         'hits' => ['hits' => [
@@ -65,6 +64,7 @@ final class ElasticsearchAdapterTest extends TestCase
                         ]],
                     ];
                 }
+
                 return [
                     'took' => 3,
                     'hits' => ['hits' => [

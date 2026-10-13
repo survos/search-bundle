@@ -24,12 +24,14 @@ trait DbalAdapterTrait
      * share one result instead of each re-running the query.
      *
      * @template T of array
+     *
      * @param callable(): T $compute
+     *
      * @return T
      */
     private function cachedFacetCompute(?CacheInterface $cache, string $kind, Query $query, SearchInterface $search, callable $compute): array
     {
-        if ($cache === null) {
+        if (null === $cache) {
             return $compute();
         }
 
@@ -96,8 +98,8 @@ trait DbalAdapterTrait
         if ($filter instanceof TermFilter && $filter->hasValues()) {
             $names = [];
             foreach (array_values($filter->getValues()) as $i => $value) {
-                $name = $this->parameterName($filter->getProperty() . '_term_' . $i);
-                $names[] = ':' . $name;
+                $name = $this->parameterName($filter->getProperty().'_term_'.$i);
+                $names[] = ':'.$name;
                 $params[$name] = $value;
             }
 
@@ -107,10 +109,10 @@ trait DbalAdapterTrait
             // query from 0.4 s to 2.5 s and the count from 0.02 s to 0.5 s. Not every facetColumns
             // entry qualifies: a json_extract() of an array field still needs the value table.
             $facetValueTable = $this->optionalStringParameter($search, 'facetValueTable');
-            if ($facetValueTable !== null && !$this->isColumnFilter($search, $filter->getProperty())) {
-                $fieldParam = $this->parameterName($filter->getProperty() . '_facet_field');
+            if (null !== $facetValueTable && !$this->isColumnFilter($search, $filter->getProperty())) {
+                $fieldParam = $this->parameterName($filter->getProperty().'_facet_field');
                 $params[$fieldParam] = $filter->getProperty();
-                $alias = 'fv_' . $this->parameterName($filter->getProperty());
+                $alias = 'fv_'.$this->parameterName($filter->getProperty());
                 $where[] = sprintf(
                     'EXISTS (SELECT 1 FROM %s %s WHERE %s.item_rowid = d.rowid AND %s.field = :%s AND %s.value IN (%s))',
                     $this->connection->quoteSingleIdentifier($facetValueTable),
@@ -121,6 +123,7 @@ trait DbalAdapterTrait
                     $alias,
                     implode(', ', $names),
                 );
+
                 return;
             }
 
@@ -132,13 +135,13 @@ trait DbalAdapterTrait
         // SQLite orders integer < text across storage classes, so `year >= '1965'` is always false
         // → zero results. CAST both sides to REAL so the comparison is numeric (also correct on Postgres).
         if ($filter instanceof RangeFilter && null !== $filter->getMin()) {
-            $name = $this->parameterName($filter->getProperty() . '_min');
+            $name = $this->parameterName($filter->getProperty().'_min');
             $where[] = sprintf('CAST(%s AS REAL) >= CAST(:%s AS REAL)', $column, $name);
             $params[$name] = $filter->getMin();
         }
 
         if ($filter instanceof RangeFilter && null !== $filter->getMax()) {
-            $name = $this->parameterName($filter->getProperty() . '_max');
+            $name = $this->parameterName($filter->getProperty().'_max');
             $where[] = sprintf('CAST(%s AS REAL) <= CAST(:%s AS REAL)', $column, $name);
             $params[$name] = $filter->getMax();
         }
@@ -162,19 +165,19 @@ trait DbalAdapterTrait
             return $columns[$property];
         }
 
-        return 'd.' . $property;
+        return 'd.'.$property;
     }
 
     private function selectList(Connection $connection, array $columns): string
     {
-        if ($columns === []) {
+        if ([] === $columns) {
             return 'd.*';
         }
 
         return implode(', ', array_map(
             static fn (string $column): string => str_contains($column, '(') || str_contains($column, ' ') || str_contains($column, '.') || str_contains($column, '*')
                 ? $column
-                : 'd.' . $connection->quoteSingleIdentifier($column),
+                : 'd.'.$connection->quoteSingleIdentifier($column),
             $columns,
         ));
     }
@@ -192,6 +195,6 @@ trait DbalAdapterTrait
             return null;
         }
 
-        return is_string($value) && $value !== '' ? $value : null;
+        return is_string($value) && '' !== $value ? $value : null;
     }
 }

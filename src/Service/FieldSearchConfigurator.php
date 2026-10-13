@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Service;
 
+use Survos\FieldBundle\Enum\Widget;
+use Survos\FieldBundle\Model\FieldDescriptor;
+use Survos\FieldBundle\Service\FieldReader;
 use Survos\SearchBundle\Search\SearchInterface;
 use Survos\SearchBundle\Twig\Components\Facet\RangeInput;
 use Survos\SearchBundle\Twig\Components\Facet\RangeSlider;
 use Survos\SearchBundle\Twig\Components\Facet\RefinementList;
-use Survos\FieldBundle\Enum\Widget;
-use Survos\FieldBundle\Model\FieldDescriptor;
-use Survos\FieldBundle\Service\FieldReader;
 
 final readonly class FieldSearchConfigurator
 {
@@ -21,7 +21,8 @@ final readonly class FieldSearchConfigurator
         private FieldReader $fieldReader,
         private int $defaultHitsPerPage = 24,
         private array $defaultHitsPerPageChoices = [12, 24, 48],
-    ) {}
+    ) {
+    }
 
     /**
      * @param string[] $allowedFields
@@ -40,7 +41,7 @@ final readonly class FieldSearchConfigurator
                 continue;
             }
 
-            if ($allowedMap !== [] && !isset($allowedMap[$descriptor->name])) {
+            if ([] !== $allowedMap && !isset($allowedMap[$descriptor->name])) {
                 continue;
             }
 
@@ -52,8 +53,8 @@ final readonly class FieldSearchConfigurator
                 $sortColumns[$descriptor->name] = $this->column($descriptor->name, $columnPrefix);
                 $label = $descriptor->getFallbackLabel();
                 [$ascendingLabel, $descendingLabel] = $this->sortLabels($descriptor, $label);
-                $search->addAvailableSort($this->column($descriptor->name, $columnPrefix) . ':asc', $ascendingLabel);
-                $search->addAvailableSort($this->column($descriptor->name, $columnPrefix) . ':desc', $descendingLabel);
+                $search->addAvailableSort($this->column($descriptor->name, $columnPrefix).':asc', $ascendingLabel);
+                $search->addAvailableSort($this->column($descriptor->name, $columnPrefix).':desc', $descendingLabel);
             }
 
             if ($descriptor->facet || $this->shouldExposeFacet($descriptor)) {
@@ -75,7 +76,7 @@ final readonly class FieldSearchConfigurator
 
     private function column(string $field, ?string $prefix): string
     {
-        return $prefix === null ? $field : $prefix . $field;
+        return null === $prefix ? $field : $prefix.$field;
     }
 
     /** @return array{0:string, 1:string} */
@@ -84,14 +85,14 @@ final readonly class FieldSearchConfigurator
         $type = strtolower(ltrim($descriptor->type, '?\\'));
 
         if (in_array($type, ['int', 'integer', 'bigint', 'smallint', 'float', 'double', 'decimal'], true)) {
-            return [$label . ' Low-High', $label . ' High-Low'];
+            return [$label.' Low-High', $label.' High-Low'];
         }
 
         if (str_contains($type, 'date') || str_contains($type, 'time')) {
-            return [$label . ' Old-New', $label . ' New-Old'];
+            return [$label.' Old-New', $label.' New-Old'];
         }
 
-        return [$label . ' A-Z', $label . ' Z-A'];
+        return [$label.' A-Z', $label.' Z-A'];
     }
 
     private function shouldExposeFacet(FieldDescriptor $descriptor): bool

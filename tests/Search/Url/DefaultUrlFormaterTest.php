@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Search\Url;
 
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Search\Facet;
 use Survos\SearchBundle\Search\Filter\RangeFilter;
 use Survos\SearchBundle\Search\Filter\TermFilter;
@@ -21,7 +22,6 @@ use Survos\SearchBundle\Search\SearchInterface;
 use Survos\SearchBundle\Search\Url\CurrentRequest;
 use Survos\SearchBundle\Search\Url\DefaultUrlFormater;
 use Survos\SearchBundle\Twig\Components\Facet\RangeInput;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 final class DefaultUrlFormaterTest extends TestCase

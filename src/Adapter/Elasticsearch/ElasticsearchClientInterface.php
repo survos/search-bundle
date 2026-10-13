@@ -7,7 +7,7 @@ namespace Survos\SearchBundle\Adapter\Elasticsearch;
 interface ElasticsearchClientInterface
 {
     /** @param array<string, mixed> $body
-     *  @return array<string, mixed>
+     * @return array<string, mixed>
      */
     public function search(string $index, array $body): array;
 
@@ -27,6 +27,7 @@ interface ElasticsearchClientInterface
 
     /**
      * @param list<array<string, mixed>> $body
+     *
      * @return array<string, mixed>
      */
     public function bulk(array $body): array;

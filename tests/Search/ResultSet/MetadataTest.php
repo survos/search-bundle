@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Search\ResultSet;
 
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Search\ResultSet\Hit;
 use Survos\SearchBundle\Search\ResultSet\ResultSet;
-use PHPUnit\Framework\TestCase;
 
 final class MetadataTest extends TestCase
 {

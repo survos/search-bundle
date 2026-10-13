@@ -14,10 +14,10 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Tests\Adapter\Meilisearch;
 
 use Meilisearch\Client;
-use Survos\SearchBundle\Adapter\Meilisearch\MeilisearchAdapter;
-use Survos\SearchBundle\Adapter\Meilisearch\MeilisearchFactory;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Client\ClientInterface;
+use Survos\SearchBundle\Adapter\Meilisearch\MeilisearchAdapter;
+use Survos\SearchBundle\Adapter\Meilisearch\MeilisearchFactory;
 
 class MeilisearchFactoryTest extends TestCase
 {

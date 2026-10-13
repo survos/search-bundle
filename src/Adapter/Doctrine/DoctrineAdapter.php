@@ -79,7 +79,7 @@ readonly class DoctrineAdapter implements AdapterInterface
     private function managerFor(SearchInterface $search): EntityManagerInterface
     {
         $indexName = $search->getIndexName();
-        if ($this->managerRegistry !== null && is_string($indexName) && class_exists($indexName)) {
+        if (null !== $this->managerRegistry && is_string($indexName) && class_exists($indexName)) {
             $resolved = $this->managerRegistry->getManagerForClass($indexName);
             if ($resolved instanceof EntityManagerInterface) {
                 return $resolved;

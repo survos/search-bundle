@@ -9,8 +9,8 @@ use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\Persistence\ManagerRegistry;
 use Survos\SearchBundle\Adapter\AdapterProvider;
-use Survos\SearchBundle\Search\SearchProvider;
 use Survos\SearchBundle\Registry\UxSearchRegistry;
+use Survos\SearchBundle\Search\SearchProvider;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
@@ -26,7 +26,8 @@ final class SearchIndexCommand
         private readonly SearchProvider $searchProvider,
         private readonly AdapterProvider $adapterProvider,
         private readonly ManagerRegistry $managerRegistry,
-    ) {}
+    ) {
+    }
 
     public function __invoke(
         SymfonyStyle $io,
@@ -41,12 +42,13 @@ final class SearchIndexCommand
         #[Option('Maximum documents to index')]
         ?int $limit = null,
     ): int {
-        $descriptors = $code === null
+        $descriptors = null === $code
             ? $this->uxSearchRegistry->all()
             : array_values(array_filter($this->uxSearchRegistry->all(), static fn ($descriptor): bool => $descriptor->code === $code || $descriptor->name === $code));
 
-        if ($descriptors === []) {
-            $io->warning($code === null ? 'No UX searches are registered.' : sprintf('No UX search registered for "%s".', $code));
+        if ([] === $descriptors) {
+            $io->warning(null === $code ? 'No UX searches are registered.' : sprintf('No UX search registered for "%s".', $code));
+
             return Command::SUCCESS;
         }
 
@@ -91,6 +93,7 @@ final class SearchIndexCommand
         $connection = $this->connectionForTable((string) $parameters['table']);
         if (!$connection->getDatabasePlatform() instanceof SQLitePlatform) {
             $io->warning(sprintf('Skipping "%s": connection is not SQLite.', $code));
+
             return;
         }
 
@@ -102,8 +105,9 @@ final class SearchIndexCommand
             (array) ($parameters['searchFields'] ?? []),
         )));
 
-        if ($searchFields === []) {
+        if ([] === $searchFields) {
             $io->warning(sprintf('Skipping "%s": no searchFields configured for %s.', $code, $table));
+
             return;
         }
 
@@ -133,13 +137,13 @@ final class SearchIndexCommand
         $io->success(sprintf('%s: ensured %s for %s (%d fields)', $code, $ftsTable, $table, count($searchFields)));
     }
 
-
     /** @param array<string, mixed> $parameters */
     private function ensurePostgresTextSearch(SymfonyStyle $io, string $code, array $parameters, bool $drop): void
     {
         $connection = $this->connectionForTable((string) $parameters['table']);
         if (!$connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
             $io->warning(sprintf('Skipping "%s": connection is not PostgreSQL.', $code));
+
             return;
         }
 
@@ -149,8 +153,9 @@ final class SearchIndexCommand
             (array) ($parameters['searchFields'] ?? []),
         )));
 
-        if ($searchFields === []) {
+        if ([] === $searchFields) {
             $io->warning(sprintf('Skipping "%s": no searchFields configured for %s.', $code, $table));
+
             return;
         }
 
@@ -174,7 +179,7 @@ final class SearchIndexCommand
     {
         $expressions = [];
         foreach ($fields as $field) {
-            if (!is_string($field) || $field === '') {
+            if (!is_string($field) || '' === $field) {
                 continue;
             }
             $expressions[] = sprintf(
@@ -183,7 +188,7 @@ final class SearchIndexCommand
             );
         }
 
-        return $expressions === [] ? "to_tsvector('english', '')" : implode(' || ', $expressions);
+        return [] === $expressions ? "to_tsvector('english', '')" : implode(' || ', $expressions);
     }
 
     private function connectionForTable(string $table): Connection

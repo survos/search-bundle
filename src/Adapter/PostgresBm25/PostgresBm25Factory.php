@@ -16,7 +16,8 @@ final readonly class PostgresBm25Factory implements AdapterFactoryInterface
     public function __construct(
         private ?ManagerRegistry $managerRegistry = null,
         private ?CacheInterface $facetCache = null,
-    ) {}
+    ) {
+    }
 
     public function support(string $dsn): bool
     {
@@ -38,13 +39,7 @@ final readonly class PostgresBm25Factory implements AdapterFactoryInterface
 
         $platform = $connection->getDatabasePlatform();
         if (!$platform instanceof PostgreSQLPlatform) {
-            throw new \LogicException(sprintf(
-                'The "%s" search adapter requires a PostgreSQL connection, but Doctrine connection "%s" uses %s. '
-                .'Point the search DSN at a backend that matches DATABASE_URL (e.g. sqlite-fts5:// for SQLite).',
-                $dsn,
-                $connectionName,
-                $platform::class,
-            ));
+            throw new \LogicException(sprintf('The "%s" search adapter requires a PostgreSQL connection, but Doctrine connection "%s" uses %s. Point the search DSN at a backend that matches DATABASE_URL (e.g. sqlite-fts5:// for SQLite).', $dsn, $connectionName, $platform::class));
         }
 
         return new PostgresBm25Adapter($connection, $this->facetCache);

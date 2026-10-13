@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Adapter\Elasticsearch;
 
 use Survos\SearchBundle\Adapter\AdapterInterface;
+use Survos\SearchBundle\Contract\EmbeddingProviderInterface;
 use Survos\SearchBundle\Search\Filter\RangeFilter;
 use Survos\SearchBundle\Search\Filter\TermFilter;
 use Survos\SearchBundle\Search\Query;
@@ -13,7 +14,6 @@ use Survos\SearchBundle\Search\ResultSet\FacetTermDistribution;
 use Survos\SearchBundle\Search\ResultSet\Hit;
 use Survos\SearchBundle\Search\ResultSet\ResultSet;
 use Survos\SearchBundle\Search\SearchInterface;
-use Survos\SearchBundle\Contract\EmbeddingProviderInterface;
 use Survos\SearchBundle\Service\ElasticIndexNameResolver;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -25,7 +25,8 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
         // DI always supplies the configured resolver; this default only serves direct
         // instantiation in tests, where sharing the namespace is deliberate.
         private ElasticIndexNameResolver $nameResolver = new ElasticIndexNameResolver(''),
-    ) {}
+    ) {
+    }
 
     public function configureParameters(OptionsResolver $resolver): void
     {
@@ -100,15 +101,11 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
         try {
             $response = $this->client->search($index, $this->queryBuilder->build($query, $search));
         } catch (\Throwable $exception) {
-            if ($search->getResolvedAdapterParameter('retrievalMode') === 'hybrid'
+            if ('hybrid' === $search->getResolvedAdapterParameter('retrievalMode')
                 && str_contains($exception->getMessage(), 'Reciprocal Rank Fusion (RRF)')) {
                 $response = $this->clientSideRrf($index, $query, $search);
             } else {
-                throw new \RuntimeException(sprintf(
-                    'Elasticsearch search failed for index "%s": %s',
-                    $index,
-                    $exception->getMessage(),
-                ), 0, $exception);
+                throw new \RuntimeException(sprintf('Elasticsearch search failed for index "%s": %s', $index, $exception->getMessage()), 0, $exception);
             }
         }
 
@@ -129,7 +126,7 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
                     'highlight' => $rawHit['highlight'] ?? null,
                     'explanation' => $rawHit['_explanation'] ?? null,
                     'rrf' => $rawHit['_search_bundle_rrf'] ?? null,
-                ], static fn (mixed $value): bool => $value !== null),
+                ], static fn (mixed $value): bool => null !== $value),
             );
         }
 
@@ -153,18 +150,13 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
                 'timedOut' => (bool) ($response['timed_out'] ?? false),
                 'shards' => $response['_shards'] ?? [],
                 'hybridImplementation' => $response['_search_bundle_hybrid'] ?? (
-                    $search->getResolvedAdapterParameter('retrievalMode') === 'hybrid' ? 'native_rrf' : null
+                    'hybrid' === $search->getResolvedAdapterParameter('retrievalMode') ? 'native_rrf' : null
                 ),
             ]);
     }
 
-
-
-
-    /** @param list<array<string, mixed>> $body */
-
     /** @param array<string, mixed> $response
-     *  @return array{0: list<FacetTermDistribution>, 1: list<FacetStat>}
+     * @return array{0: list<FacetTermDistribution>, 1: list<FacetStat>}
      */
     private function facets(array $response, Query $query, SearchInterface $search): array
     {
@@ -184,7 +176,7 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
                 ->setValues($values)
                 ->setCheckedValues($filter instanceof TermFilter ? $filter->getValues() : []);
 
-            $rawStats = $response['aggregations'][$property]['stats'] ?? $response['aggregations'][$property . '__stats'] ?? null;
+            $rawStats = $response['aggregations'][$property]['stats'] ?? $response['aggregations'][$property.'__stats'] ?? null;
             if (is_array($rawStats)) {
                 $stats[] = new FacetStat(
                     $property,

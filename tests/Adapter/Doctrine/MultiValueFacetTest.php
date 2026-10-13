@@ -30,6 +30,7 @@ final class MultiValueFacetTest extends AbstractDoctrineTestCase
                     foreach ($qb->select('DISTINCT o.id AS id, o.metadata AS metadata')->getQuery()->getArrayResult() as $row) {
                         $tags[$row['id']] = $row['metadata']['tags'] ?? [];
                     }
+
                     return $tags;
                 },
             ],

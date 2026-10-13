@@ -13,9 +13,9 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\DependencyInjection;
 
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\DependencyInjection\UrlFormaterPass;
 use Survos\SearchBundle\Search\Url\UrlFormaterProvider;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;

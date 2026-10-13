@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Twig;
 
-use Survos\SearchBundle\Context\ContextProvider;
 use Survos\FieldBundle\Model\FieldDescriptor;
 use Survos\FieldBundle\Service\FieldReader;
+use Survos\SearchBundle\Context\ContextProvider;
 use Survos\SearchBundle\Search\HitTemplateSearchInterface;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;
@@ -16,7 +16,8 @@ final class SearchExtension extends AbstractExtension
     public function __construct(
         private readonly FieldReader $fieldReader,
         private readonly ContextProvider $contextProvider,
-    ) {}
+    ) {
+    }
 
     public function getFunctions(): array
     {

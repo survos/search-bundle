@@ -13,11 +13,11 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Tests\Search;
 
+use PHPUnit\Framework\MockObject\Exception;
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Exception\SearchException;
 use Survos\SearchBundle\Search\AbstractSearch;
 use Survos\SearchBundle\Search\SearchProvider;
-use PHPUnit\Framework\MockObject\Exception;
-use PHPUnit\Framework\TestCase;
 
 class SearchProviderTest extends TestCase
 {

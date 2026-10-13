@@ -14,9 +14,9 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Tests\Adapter\Algolia;
 
 use Algolia\AlgoliaSearch\Api\SearchClient;
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Adapter\Algolia\AlgoliaAdapter;
 use Survos\SearchBundle\Adapter\Algolia\AlgoliaFactory;
-use PHPUnit\Framework\TestCase;
 
 class AlgoliaFactoryTest extends TestCase
 {

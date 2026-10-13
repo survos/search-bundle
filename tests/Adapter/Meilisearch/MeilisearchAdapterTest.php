@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Tests\Adapter\Meilisearch;
 
 use Meilisearch\Client;
+use PHPUnit\Framework\TestCase;
 use Survos\SearchBundle\Adapter\Meilisearch\MeilisearchAdapter;
 use Survos\SearchBundle\Adapter\Meilisearch\QueryBuilder;
 use Survos\SearchBundle\Exception\ResultSetException;
@@ -26,7 +27,6 @@ use Survos\SearchBundle\Search\ResultSet\FacetTermDistribution;
 use Survos\SearchBundle\Search\ResultSet\Hit;
 use Survos\SearchBundle\Search\ResultSet\ResultSet;
 use Survos\SearchBundle\Search\SearchInterface;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\OptionsResolver\Exception\InvalidOptionsException;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
