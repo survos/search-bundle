@@ -174,7 +174,9 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
             $values = [];
             foreach (($response['aggregations'][$property]['values']['buckets'] ?? $response['aggregations'][$property]['buckets'] ?? []) as $bucket) {
                 if (is_array($bucket) && isset($bucket['key'])) {
-                    $values[(string) $bucket['key']] = (int) ($bucket['doc_count'] ?? 0);
+                    // Booleans bucket as 1/0 and dates as epoch millis; key_as_string is what a
+                    // filter on the facet accepts back ("true", "2026-10-13").
+                    $values[(string) ($bucket['key_as_string'] ?? $bucket['key'])] = (int) ($bucket['doc_count'] ?? 0);
                 }
             }
             $filter = $query->getActiveFilter($property);
