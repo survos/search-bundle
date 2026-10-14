@@ -62,7 +62,15 @@ export default class extends Controller {
                 clearRefinements({ container: this.clearTarget, templates: { resetLabel: 'Clear filters' }, cssClasses: css.clearRefinements }),
                 sortBy({ container: this.sortTarget, items: [{ value: this.nameValue, label: 'Relevance' }, ...this.sortsValue], cssClasses: css.sortBy }),
             ];
-            for (const node of this.facetTargets) widgets.push(refinementList({ container: node, attribute: node.dataset.field, limit: 8, showMore: true, showMoreLimit: 100, sortBy: ['count:desc', 'name:asc'], cssClasses: css.refinementList }));
+            for (const node of this.facetTargets) {
+                // data-value-labels='{"true":"With images"}' names raw values (booleans, codes) for display.
+                const names = node.dataset.valueLabels ? JSON.parse(node.dataset.valueLabels) : null;
+                widgets.push(refinementList({
+                    container: node, attribute: node.dataset.field, limit: 8, showMore: true, showMoreLimit: 100,
+                    sortBy: ['count:desc', 'name:asc'], cssClasses: css.refinementList,
+                    ...(names && { transformItems: (items) => items.map((item) => ({ ...item, label: names[item.value] ?? item.label, highlighted: names[item.value] ?? item.highlighted })) }),
+                }));
+            }
             for (const node of this.rangeTargets) widgets.push(rangeInput({ container: node, attribute: node.dataset.field, precision: 0, cssClasses: css.rangeInput }));
             this.search.addWidgets(widgets);
             this.search.start();

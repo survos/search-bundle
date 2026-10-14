@@ -25,7 +25,7 @@ comparison searches over the same entity are also allowed.
 
 The controller receives endpoint, name, template, sorts, and context values. Its targets are
 query, hits, stats, pagination, current, clear, sort, facet, range, and error. Each facet/range
-container declares `data-field`; a range can supply `data-label` for accessible input names.
+container declares `data-field`; a range can supply `data-label` for accessible input names. A refinement list can supply `data-value-labels` (JSON, raw value → display name) for values like `true`/`false`.
 The template URL must return **plain Twig source**, not server-rendered hits. Browser Twig
 renders each hit with `{hit, ...context}`. Escape source values; only use raw highlight fragments
 when the selected adapter guarantees HTML encoding. Elasticsearch highlights use HTML encoding.
