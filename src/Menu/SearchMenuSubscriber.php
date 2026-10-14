@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Menu;
 
+use Survos\MenuBundle\Attribute\AsMenuListener;
+use Survos\MenuBundle\Event\MenuEvent;
+use Survos\MenuBundle\MenuSlot;
 use Survos\SearchBundle\Registry\UxSearchRegistry;
-use Survos\TablerBundle\Event\MenuEvent;
 use Survos\TablerBundle\Menu\AbstractAdminMenuSubscriber;
 use Survos\TablerBundle\Service\IconService;
 use Survos\TablerBundle\Service\RouteAliasService;
-use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\Routing\RouterInterface;
 
 class SearchMenuSubscriber extends AbstractAdminMenuSubscriber
@@ -38,7 +39,7 @@ class SearchMenuSubscriber extends AbstractAdminMenuSubscriber
         return [];
     }
 
-    #[AsEventListener(event: MenuEvent::ADMIN_NAVBAR_MENU)]
+    #[AsMenuListener(MenuSlot::ADMIN_NAVBAR_MENU)]
     public function onAdminNavbarMenu(MenuEvent $event): void
     {
         $searches = $this->searchRegistry->all();
