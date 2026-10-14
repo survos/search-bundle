@@ -37,6 +37,10 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
             'sharedIndex' => false,
             // Filter clauses every query carries, the scope of this search within its index.
             'baseFilters' => [],
+            // Scoring-only clauses (bool `should`): they reorder hits, never drop one. E.g.
+            // {"constant_score": {"filter": {"term": {"hasImage": true}}, "boost": 100}} ranks rows
+            // with an image first, each group still by relevance.
+            'rankBoosts' => [],
             'searchFields' => [],
             'sourceFields' => [],
             'facetFields' => [],
@@ -77,6 +81,7 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
         $resolver->setAllowedTypes('index', ['null', 'string']);
         $resolver->setAllowedTypes('sharedIndex', 'bool');
         $resolver->setAllowedTypes('baseFilters', 'array');
+        $resolver->setAllowedTypes('rankBoosts', 'array');
         $resolver->setAllowedTypes('searchFields', 'string[]');
         $resolver->setAllowedTypes('sourceFields', 'string[]');
         $resolver->setAllowedTypes('facetFields', 'array');

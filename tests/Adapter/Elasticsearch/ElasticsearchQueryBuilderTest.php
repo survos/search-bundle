@@ -77,11 +77,24 @@ final class ElasticsearchQueryBuilderTest extends TestCase
         }
     }
 
+    public function testRankBoostsReorderWithoutFiltering(): void
+    {
+        $boost = [['constant_score' => ['filter' => ['term' => ['hasImage' => true]], 'boost' => 100]]];
+        foreach (['', 'textile'] as $text) {
+            $body = (new ElasticsearchQueryBuilder())->build((new Query())->setQueryString($text), $this->search(['rankBoosts' => $boost]));
+            self::assertSame($boost, $body['query']['bool']['should'], 'query "'.$text.'"');
+            self::assertSame([], $body['query']['bool']['filter']);
+            self::assertArrayNotHasKey('minimum_should_match', $body['query']['bool'], 'a should beside a must only scores');
+        }
+        $plain = (new ElasticsearchQueryBuilder())->build((new Query())->setQueryString('textile'), $this->search([]));
+        self::assertArrayNotHasKey('should', $plain['query']['bool']);
+    }
+
     private function search(array $overrides): SearchInterface
     {
         $parameters = $overrides + [
             'retrievalMode' => 'lexical',
-            'baseFilters' => [],
+            'baseFilters' => [], 'rankBoosts' => [],
             'fuzziness' => 'AUTO:5,9',
             'fuzzyPrefixLength' => 1,
             'prefixSearch' => true,

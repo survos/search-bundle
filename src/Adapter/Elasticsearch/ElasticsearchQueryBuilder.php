@@ -103,8 +103,9 @@ final readonly class ElasticsearchQueryBuilder
      */
     private function lexicalQuery(string $query, SearchInterface $search, array $filters): array
     {
+        $boosts = array_values($search->getResolvedAdapterParameter('rankBoosts') ?? []);
         if ('' === $query) {
-            return ['bool' => ['must' => [['match_all' => new \stdClass()]], 'filter' => $filters]];
+            return ['bool' => ['must' => [['match_all' => new \stdClass()]], 'filter' => $filters] + ([] === $boosts ? [] : ['should' => $boosts])];
         }
         $fields = $search->getResolvedAdapterParameter('searchFields');
         $exact = ['query' => $query, 'fields' => $fields, 'type' => 'best_fields', 'operator' => 'and'];
@@ -120,7 +121,7 @@ final readonly class ElasticsearchQueryBuilder
             $clauses[] = ['multi_match' => ['query' => $query, 'fields' => $fields, 'type' => 'bool_prefix', 'operator' => 'and', 'boost' => 2]];
         }
 
-        return ['bool' => ['must' => [['dis_max' => ['queries' => $clauses]]], 'filter' => $filters]];
+        return ['bool' => ['must' => [['dis_max' => ['queries' => $clauses]]], 'filter' => $filters] + ([] === $boosts ? [] : ['should' => $boosts])];
     }
 
     /** @return list<float> */
