@@ -15,6 +15,9 @@ export default class extends Controller {
         // objectID -> hit as returned by the endpoint, for the {} raw-document dialog.
         this.rawHits = new Map();
         if (this.rawJsonValue) this.installRawJsonDialog();
+        // A hit card is one big link: Turbo's hover prefetch would load every detail page the
+        // pointer crosses (seconds of server time each). Clicks still go through Turbo.
+        this.hitsTarget.dataset.turboPrefetch = 'false';
         if (this.originLinksValue) this.installOriginLinks();
         try {
             const [routes, response] = await Promise.all([
