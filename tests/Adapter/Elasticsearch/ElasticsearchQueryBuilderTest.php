@@ -90,6 +90,21 @@ final class ElasticsearchQueryBuilderTest extends TestCase
         self::assertArrayNotHasKey('should', $plain['query']['bool']);
     }
 
+    public function testQuotedPhraseDoesNotAllowFuzzyOrPrefixAlternatives(): void
+    {
+        $body = (new ElasticsearchQueryBuilder())->build((new Query())->setQueryString('"town council"'), $this->search(['searchFields' => ['title^3', 'ocrText']]));
+        self::assertSame([['multi_match' => ['query' => 'town council', 'fields' => ['title^3', 'ocrText'], 'type' => 'phrase', 'slop' => 0]]], $body['query']['bool']['must']);
+    }
+
+    public function testMixedPhraseAndWordsRequiresBoth(): void
+    {
+        $body = (new ElasticsearchQueryBuilder())->build((new Query())->setQueryString('"town council" election'), $this->search([]));
+        $must = $body['query']['bool']['must'];
+        self::assertCount(2, $must);
+        self::assertSame('phrase', $must[0]['multi_match']['type']);
+        self::assertSame('election', $must[1]['bool']['must'][0]['dis_max']['queries'][0]['multi_match']['query']);
+    }
+
     private function search(array $overrides): SearchInterface
     {
         $parameters = $overrides + [

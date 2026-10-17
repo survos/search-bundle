@@ -108,6 +108,23 @@ final readonly class ElasticsearchQueryBuilder
             return ['bool' => ['must' => [['match_all' => new \stdClass()]], 'filter' => $filters] + ([] === $boosts ? [] : ['should' => $boosts])];
         }
         $fields = $search->getResolvedAdapterParameter('searchFields');
+        // Quotes constrain the lexical query; unquoted terms retain OCR tolerance.
+        preg_match_all('/"([^"\\r\\n]+)"/u', $query, $phrases);
+        if ([] !== $phrases[1]) {
+            $must = [];
+            foreach ($phrases[1] as $phrase) {
+                if ('' !== trim($phrase)) {
+                    $must[] = ['multi_match' => ['query' => trim($phrase), 'fields' => $fields, 'type' => 'phrase', 'slop' => 0]];
+                }
+            }
+            $remaining = trim(preg_replace('/"([^"\\r\\n]+)"/u', ' ', $query));
+            if ('' !== $remaining) {
+                $must[] = $this->lexicalQuery($remaining, $search, []);
+            }
+            if ([] !== $must) {
+                return ['bool' => ['must' => $must, 'filter' => $filters] + ([] === $boosts ? [] : ['should' => $boosts])];
+            }
+        }
         $exact = ['query' => $query, 'fields' => $fields, 'type' => 'best_fields', 'operator' => 'and'];
         $clauses = [
             ['multi_match' => $exact + ['boost' => 3]],
