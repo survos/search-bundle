@@ -19,7 +19,7 @@ class ResultSet
 {
     private ?string $indexUid = null;
 
-    /** @var Hit[] */
+    /** @var array<array-key, Hit> */
     private array $hits = [];
 
     private int $totalResults = 0;
@@ -46,7 +46,7 @@ class ResultSet
     }
 
     /**
-     * @return Hit[]
+     * @return array<array-key, Hit>
      */
     public function getHits(): array
     {
@@ -54,7 +54,7 @@ class ResultSet
     }
 
     /**
-     * @param Hit[] $hits
+     * @param array<array-key, Hit> $hits
      */
     public function setHits(array $hits): static
     {
@@ -98,7 +98,7 @@ class ResultSet
     }
 
     /**
-     * @param FacetTermDistribution[] $facetDistributions
+     * @param array<array-key, FacetTermDistribution> $facetDistributions
      */
     public function setFacetDistributions(array $facetDistributions): static
     {
@@ -128,7 +128,7 @@ class ResultSet
     }
 
     /**
-     * @param FacetStat[] $facetStats
+     * @param array<array-key, FacetStat> $facetStats
      */
     public function setFacetStats(array $facetStats): static
     {

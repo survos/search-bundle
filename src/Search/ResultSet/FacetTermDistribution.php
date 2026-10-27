@@ -17,7 +17,7 @@ class FacetTermDistribution
 {
     private string $property;
 
-    /** @var array<mixed, int> */
+    /** @var array<array-key, int> */
     private array $values = [];
 
     /** @var array<int, mixed> */
@@ -36,7 +36,7 @@ class FacetTermDistribution
     }
 
     /**
-     * @return array<mixed, int>
+     * @return array<array-key, int>
      */
     public function getValues(): array
     {
@@ -44,7 +44,7 @@ class FacetTermDistribution
     }
 
     /**
-     * @param array<mixed, int> $values
+     * @param array<array-key, int> $values
      */
     public function setValues(array $values): static
     {

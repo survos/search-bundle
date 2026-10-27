@@ -52,7 +52,7 @@ class Query
     }
 
     /**
-     * @param FilterInterface[] $activeFilters
+     * @param array<array-key, FilterInterface> $activeFilters keys are rebuilt from each filter property
      */
     public function setActiveFilters(array $activeFilters): static
     {
