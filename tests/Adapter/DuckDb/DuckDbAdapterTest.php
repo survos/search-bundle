@@ -112,6 +112,42 @@ final class DuckDbAdapterTest extends TestCase
         self::assertSame([], $this->recorder->all());
     }
 
+    public function testSmartSearchCutoffFacetsRangeAndSecondPageShareCandidates(): void
+    {
+        $this->db->exec('ALTER TABLE works ADD COLUMN embedding DOUBLE[2]');
+        $this->db->exec("UPDATE works SET embedding = CASE id WHEN '1' THEN [1.0,0.0] WHEN '2' THEN [0.8,0.6] WHEN '3' THEN [0.6,0.8] WHEN '4' THEN [-1.0,0.0] ELSE [1.0,0.0] END");
+        $embedder = new class implements \Survos\SearchBundle\Adapter\DuckDb\DuckDbQueryEmbedderInterface {
+            public function embedQuery(string $text): array
+            {
+                return [1.0, 0.0];
+            }
+        };
+        $options = ['vectorColumn' => 'd.embedding', 'vectorDimensions' => 2, 'queryEmbedder' => $embedder, 'minimumSimilarity' => 0.5];
+        $query = (new Query())->setSearchMode('semantic')->setQueryString('tech gifts')->setActiveHitsPerPage(1)
+            ->addActiveFilter(new RangeFilter('year', 1900, 1970))->addActiveFilter(new TermFilter('kind', ['painting']));
+        $first = $this->search($query, $options);
+        $second = $this->search((clone $query)->setCurrentPage(2), $options);
+        self::assertSame(2, $first->getTotalResults());
+        self::assertSame(2, $second->getTotalResults());
+        self::assertSame('1', $first->getHits()[0]->getData()['id']);
+        self::assertSame('2', $second->getHits()[0]->getData()['id']);
+        self::assertSame(['painting' => 2], $second->getFacetDistributions()['kind']->getValues());
+        self::assertSame(['nature' => 2, 'blue' => 1, 'red' => 1], $second->getFacetDistributions()['tags']->getValues());
+        self::assertSame(1950, $second->getFacetStats()['year']->getMax());
+        self::assertCount(0, $this->search((clone $query)->setCurrentPage(3), $options)->getHits());
+        self::assertSame(1, $this->search((clone $query)->setMinimumSimilarity(0.9), $options)->getTotalResults());
+        self::assertSame(0, $this->search((clone $query)->setMinimumSimilarity(0.9)->addActiveFilter(new RangeFilter('year', 1920)), $options)->getTotalResults());
+        self::assertSame(3, $this->search((clone $query)->setActiveFilters([]), $options)->getTotalResults());
+        self::assertSame(4, $this->search((clone $query)->setQueryString('')->setActiveFilters([]), $options)->getTotalResults());
+        self::assertSame(0, $this->search((clone $query)->setSearchMode('lexical'), $options)->getTotalResults());
+    }
+
+    public function testSmartSearchRejectsMissingCapability(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->search((new Query())->setSearchMode('semantic')->setQueryString('gifts'));
+    }
+
     public function testUnknownFacetCannotBecomeSql(): void
     {
         $this->expectException(\InvalidArgumentException::class);

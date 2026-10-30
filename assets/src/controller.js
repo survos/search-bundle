@@ -2,6 +2,35 @@ import { Controller } from '@hotwired/stimulus';
 import { getComponent } from '@symfony/ux-live-component';
 
 class controller extends Controller {
+    static targets = ['smartDialog', 'smartError'];
+
+    openSmartSearch() {
+        this.smartErrorTarget.hidden = true;
+        this.smartDialogTarget.showModal();
+        this.smartDialogTarget.querySelector('textarea').focus();
+    }
+    closeSmartSearch() {
+        this.smartDialogTarget.close();
+    }
+    async submitSmartSearch(event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const description = form.elements.description.value.trim();
+        if (!description || !form.reportValidity()) return;
+        const button = form.querySelector('[type="submit"]');
+        button.disabled = true;
+        this.smartErrorTarget.hidden = true;
+        try {
+            const component = await getComponent(this.element);
+            await component.action('submitSmartSearch', { description });
+            this.closeSmartSearch();
+        } catch (error) {
+            this.smartErrorTarget.hidden = false;
+        } finally {
+            button.disabled = false;
+        }
+    }
+
     async initialize() {
         this.component = await getComponent(this.element);
     }

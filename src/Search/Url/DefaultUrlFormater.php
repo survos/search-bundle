@@ -39,10 +39,20 @@ class DefaultUrlFormater implements UrlFormaterInterface
             $params[self::QUERY] = $query->getQueryString();
         }
 
+        if ('semantic' === $query->getSearchMode()) {
+            $params['searchMode'] = 'semantic';
+        }
+        if (null !== $query->getMinimumSimilarity()) {
+            $params['minimumSimilarity'] = $query->getMinimumSimilarity();
+        }
+
         if ($query->getActiveSort()) {
             $params[self::SORT_BY] = $query->getActiveSort();
         }
 
+        if (12 !== $query->getActiveHitsPerPage()) {
+            $params['hitsPerPage'] = $query->getActiveHitsPerPage();
+        }
         if ($query->getCurrentPage() > 1) {
             $params[self::PAGE] = $query->getCurrentPage();
         }
@@ -64,6 +74,12 @@ class DefaultUrlFormater implements UrlFormaterInterface
 
     public function applyFilters(CurrentRequest $currentRequest, SearchInterface $search, Query $query): void
     {
+        $mode = $currentRequest->parameters['searchMode'] ?? 'lexical';
+        $query->setSearchMode(in_array($mode, ['lexical', 'semantic'], true) ? $mode : 'lexical');
+        $cutoff = $currentRequest->parameters['minimumSimilarity'] ?? null;
+        if (is_numeric($cutoff) && is_finite((float) $cutoff) && $cutoff >= -1 && $cutoff <= 1) {
+            $query->setMinimumSimilarity((float) $cutoff);
+        }
         if ($q = $currentRequest->parameters[self::QUERY] ?? null) {
             $sanitizedQuery = mb_substr((string) $q, 0, 1000);
             $query->setQueryString($sanitizedQuery);
@@ -76,6 +92,10 @@ class DefaultUrlFormater implements UrlFormaterInterface
             }
         }
 
+        $hitsPerPage = $currentRequest->parameters['hitsPerPage'] ?? null;
+        if (is_scalar($hitsPerPage) && in_array((int) $hitsPerPage, $search->getAvailableHitsPerPage(), true)) {
+            $query->setActiveHitsPerPage((int) $hitsPerPage);
+        }
         if ($p = $currentRequest->parameters[self::PAGE] ?? null) {
             $pageNumber = (int) $p;
             if ($pageNumber >= 1) {
@@ -130,7 +150,7 @@ class DefaultUrlFormater implements UrlFormaterInterface
      */
     private function getSearchableParameterKeys(SearchInterface $search): array
     {
-        $keys = [self::PAGE, self::SORT_BY];
+        $keys = [self::QUERY, self::PAGE, self::SORT_BY, 'searchMode', 'minimumSimilarity', 'hitsPerPage'];
         foreach ($search->getFacets() as $facet) {
             $propertyInUrl = str_replace('.', '_', $facet->getProperty());
             $keys[] = $propertyInUrl;

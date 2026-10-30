@@ -126,6 +126,30 @@ final class LayoutUrlRewritingTest extends TestCase
         self::assertSame(['url' => 'https://example.test/route?ok=1'], $layout->dispatchedEvents[1][1]);
     }
 
+    public function testSmartSearchSubmissionAndReturnToLiveKeywordsPreserveFacets(): void
+    {
+        $layout = $this->createLayout(enabled: false);
+        $layout->onInitialMount(['name' => 'listing', 'initialQuery' => ['query' => 'phone', 'filters' => ['category' => 'electronics']]]);
+        self::assertSame('phone', $layout->keywordQuery);
+        $layout->query->setCurrentPage(3);
+        $layout->submitSmartSearch('  tech gifts  ');
+        self::assertSame('semantic', $layout->query->getSearchMode());
+        self::assertSame('tech gifts', $layout->query->getQueryString());
+        self::assertSame(1, $layout->query->getCurrentPage());
+        self::assertTrue($layout->query->hasActiveFilter('category'));
+        $layout->submitSmartSearch('   ');
+        self::assertSame('tech gifts', $layout->query->getQueryString());
+        $layout->clearSmartSearch();
+        self::assertSame('lexical', $layout->query->getSearchMode());
+        self::assertSame('phone', $layout->query->getQueryString());
+        $layout->submitSmartSearch('tech gifts');
+        $layout->keywordQuery = 'laptop';
+        $layout->updateKeywordSearch();
+        self::assertSame('lexical', $layout->query->getSearchMode());
+        self::assertSame('laptop', $layout->query->getQueryString());
+        self::assertTrue($layout->query->hasActiveFilter('category'));
+    }
+
     private function createLayout(bool $enabled): TestableLayout
     {
         $search = new class extends AbstractSearch {

@@ -25,6 +25,8 @@ final readonly class DuckDbAdapter implements AdapterInterface
 
     public function configureParameters(OptionsResolver $resolver): void
     {
+        $resolver->setDefault('vectorCoverage', null);
+        $resolver->setAllowedTypes('vectorCoverage', ['null', 'array']);
         $resolver->setRequired('table');
         $resolver->setAllowedTypes('table', 'string');
         foreach ([
@@ -35,6 +37,12 @@ final readonly class DuckDbAdapter implements AdapterInterface
         ] as $key => $value) {
             $resolver->setDefault($key, $value)->setAllowedTypes($key, get_debug_type($value));
         }
+        $resolver->setDefaults(['vectorColumn' => '', 'vectorDimensions' => 0, 'minimumSimilarity' => 0.3, 'queryEmbedder' => null]);
+        $resolver->setAllowedTypes('vectorColumn', 'string');
+        $resolver->setAllowedTypes('vectorDimensions', 'int');
+        $resolver->setAllowedTypes('minimumSimilarity', ['int', 'float']);
+        $resolver->setAllowedValues('minimumSimilarity', static fn ($v): bool => is_finite($v) && $v >= -1 && $v <= 1);
+        $resolver->setAllowedTypes('queryEmbedder', ['null', DuckDbQueryEmbedderInterface::class]);
         $resolver->setAllowedValues('maxFacetValues', static fn (int $value): bool => $value >= 1 && $value <= 10000);
     }
 
@@ -57,7 +65,7 @@ final readonly class DuckDbAdapter implements AdapterInterface
         if (null !== $sort && !array_key_exists($sort, $p['sortColumns'])) {
             throw new \InvalidArgumentException('Unknown DuckDB sort: '.$sort);
         }
-        $order = null !== $sort ? $p['sortColumns'][$sort].', ' : ('' !== $p['ftsFunction'] && '' !== trim($query->getQueryString()) ? 'd._duckScore DESC, ' : '');
+        $order = null !== $sort ? $p['sortColumns'][$sort].', ' : (('semantic' === $query->getSearchMode() || '' !== $p['ftsFunction']) && '' !== trim($query->getQueryString()) ? 'd._duckScore DESC, ' : '');
         $limit = max(1, $query->getActiveHitsPerPage());
         $offset = $limit * max(0, $query->getCurrentPage() - 1);
         $rows = $this->execute($db, $prefix.'SELECT '.implode(', ', $p['selectColumns']).', d._duckScore AS _score'.$from.' ORDER BY '.$order.$p['idColumn'].' LIMIT '.$limit.' OFFSET '.$offset, $bindings, $dataset)->fetchAll(\PDO::FETCH_ASSOC);
@@ -104,7 +112,33 @@ final readonly class DuckDbAdapter implements AdapterInterface
         $text = trim($query->getQueryString());
         $predicate = '';
         $score = '0.0';
-        if ('' !== $text && '' !== $p['ftsFunction']) {
+        if ('semantic' === $query->getSearchMode()) {
+            if ('' === $p['vectorColumn'] || $p['vectorDimensions'] < 1 || null === $p['queryEmbedder']) {
+                throw new \LogicException('Smart Search is not available for this dataset.');
+            }
+            if ('' !== $text) {
+                $vector = $p['queryEmbedder']->embedQuery($text);
+                if (!array_is_list($vector) || count($vector) !== $p['vectorDimensions']) {
+                    throw new \InvalidArgumentException('Query embedding dimensions do not match the dataset.');
+                }
+                $norm = 0.0;
+                foreach ($vector as $value) {
+                    if ((!is_float($value) && !is_int($value)) || !is_finite($value)) {
+                        throw new \InvalidArgumentException('Query vector must contain finite numbers.');
+                    }
+                    $norm += $value * $value;
+                }
+                if (!is_finite($norm) || $norm <= 0) {
+                    throw new \InvalidArgumentException('Query vector must have a finite nonzero norm.');
+                }
+                // DuckDB 2.0 array statistics can fail when a prepared array score is filtered.
+                // The list function computes the same cosine similarity; dimensions were checked above.
+                $score = 'list_cosine_similarity('.$p['vectorColumn'].', CAST(? AS DOUBLE[]))';
+                array_unshift($bindings, json_encode($vector, JSON_THROW_ON_ERROR));
+                $predicate = 'd._duckScore >= ?';
+                $bindings[] = $query->getMinimumSimilarity() ?? $p['minimumSimilarity'];
+            }
+        } elseif ('' !== $text && '' !== $p['ftsFunction']) {
             $score = $p['ftsFunction'].'('.$p['idColumn'].', ?)';
             array_unshift($bindings, $text);
             $predicate = 'd._duckScore IS NOT NULL';

@@ -26,6 +26,33 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 final class DefaultUrlFormaterTest extends TestCase
 {
+    public function testSemanticStateSurvivesUrlRoundTripAndLexicalSwitch(): void
+    {
+        $router = $this->createStub(UrlGeneratorInterface::class);
+        $router->method('generate')->willReturnCallback(static fn ($route, $params): string => 'https://example.com/search?'.http_build_query($params));
+        $formatter = new DefaultUrlFormater($router);
+        $search = $this->createStub(SearchInterface::class);
+        $search->method('getFacets')->willReturn([new Facet('year', 'Year'), new Facet('kind', 'Kind')]);
+        $search->method('getAvailableHitsPerPage')->willReturn([12, 24]);
+        $query = (new Query())->setQueryString('tech gifts')->setSearchMode('semantic')->setMinimumSimilarity(0.4)->setCurrentPage(2)->setActiveHitsPerPage(24)
+            ->addActiveFilter(new RangeFilter('year', 1950, 2000))->addActiveFilter(new TermFilter('kind', ['painting']));
+        $url = $formatter->generateUrl(new CurrentRequest('search', []), $search, $query);
+        parse_str(parse_url($url, PHP_URL_QUERY), $params);
+        $restored = new Query();
+        $formatter->applyFilters(new CurrentRequest('search', $params), $search, $restored);
+        self::assertSame('semantic', $restored->getSearchMode());
+        self::assertSame('tech gifts', $restored->getQueryString());
+        self::assertSame(0.4, $restored->getMinimumSimilarity());
+        self::assertSame(2, $restored->getCurrentPage());
+        self::assertSame(24, $restored->getActiveHitsPerPage());
+        self::assertEquals(1950, $restored->getActiveFilter('year')->getMin());
+        self::assertSame(['painting'], $restored->getActiveFilter('kind')->getValues());
+        $restored->setSearchMode('lexical')->setQueryString('');
+        $url = $formatter->generateUrl(new CurrentRequest('search', $params), $search, $restored);
+        self::assertStringNotContainsString('searchMode=', $url);
+        self::assertStringNotContainsString('query=', $url);
+    }
+
     public function testGenerateUrl(): void
     {
         $urlGenerator = $this->createMock(UrlGeneratorInterface::class);

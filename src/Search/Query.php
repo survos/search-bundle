@@ -19,6 +19,39 @@ class Query
 {
     private string $queryString = '';
 
+    private string $searchMode = 'lexical';
+    private ?float $minimumSimilarity = null;
+
+    public function getSearchMode(): string
+    {
+        return $this->searchMode;
+    }
+
+    public function setSearchMode(string $mode): static
+    {
+        if (!in_array($mode, ['lexical', 'semantic'], true)) {
+            throw new \InvalidArgumentException('Unknown search mode.');
+        }
+        $this->searchMode = $mode;
+
+        return $this;
+    }
+
+    public function getMinimumSimilarity(): ?float
+    {
+        return $this->minimumSimilarity;
+    }
+
+    public function setMinimumSimilarity(?float $value): static
+    {
+        if (null !== $value && (!is_finite($value) || $value < -1 || $value > 1)) {
+            throw new \InvalidArgumentException('Minimum cosine similarity must be between -1 and 1.');
+        }
+        $this->minimumSimilarity = $value;
+
+        return $this;
+    }
+
     /** Browser search consumes the index projection without loading Doctrine entities. */
     public bool $hydrateEntities = true;
 

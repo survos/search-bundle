@@ -40,11 +40,35 @@ class Layout
     use DefaultActionTrait;
 
     #[LiveProp(
-        writable: ['queryString', 'activeSort', 'activeHitsPerPage'],
+        writable: ['queryString', 'activeSort', 'activeHitsPerPage', 'minimumSimilarity'],
         useSerializerForHydration: true,
-        onUpdated: ['queryString' => 'resetCurrentPage', 'activeSort' => 'resetCurrentPage', 'activeHitsPerPage' => 'resetCurrentPage']
+        onUpdated: ['queryString' => 'resetCurrentPage', 'activeSort' => 'resetCurrentPage', 'activeHitsPerPage' => 'resetCurrentPage', 'minimumSimilarity' => 'resetCurrentPage']
     )]
     public ?Query $query = null;
+
+    #[LiveProp(writable: true, onUpdated: 'updateKeywordSearch')]
+    public string $keywordQuery = '';
+
+    public function updateKeywordSearch(): void
+    {
+        $this->query->setSearchMode('lexical')->setQueryString($this->keywordQuery)->setCurrentPage(1);
+    }
+
+    #[LiveAction]
+    public function submitSmartSearch(#[LiveArg] string $description): void
+    {
+        $description = trim($description);
+        if ('' === $description) {
+            return;
+        }
+        $this->query->setSearchMode('semantic')->setQueryString($description)->setCurrentPage(1);
+    }
+
+    #[LiveAction]
+    public function clearSmartSearch(): void
+    {
+        $this->updateKeywordSearch();
+    }
 
     #[LiveProp]
     public ?string $name = null;
@@ -126,6 +150,9 @@ class Layout
             }
         }
 
+        if ('lexical' === $this->query->getSearchMode()) {
+            $this->keywordQuery = $this->query->getQueryString() ?? '';
+        }
         $this->performSearch();
     }
 
@@ -145,13 +172,28 @@ class Layout
         }
     }
 
+    public function getSmartSearchAvailable(): bool
+    {
+        $p = $this->search?->getResolvedAdapterParameters() ?? [];
+
+        return ($p['smartSearchAvailable'] ?? false)
+            || (!empty($p['vectorColumn']) && ($p['vectorDimensions'] ?? 0) > 0
+                && ($p['queryEmbedder'] ?? null) instanceof \Survos\SearchBundle\Adapter\DuckDb\DuckDbQueryEmbedderInterface);
+    }
+
+    #[LiveAction]
+    public function setSearchMode(#[LiveArg] string $mode): void
+    {
+        $this->query->setSearchMode($mode)->setCurrentPage(1);
+    }
+
     #[LiveAction]
     public function changeCurrentPage(#[LiveArg] int $page): void
     {
         $this->query->setCurrentPage($page);
     }
 
-    public function resetCurrentPage(string|int|null $previousValue): void
+    public function resetCurrentPage(string|int|float|null $previousValue): void
     {
         $this->query->setCurrentPage(1);
     }
@@ -231,6 +273,9 @@ class Layout
         $this->applyFilters($searchQuery, $this->fixedFilters);
 
         $this->searcher->search($searchQuery, $this->search);
+        if ($this->getSmartSearchAvailable() && null === $this->query->getMinimumSimilarity()) {
+            $this->query->setMinimumSimilarity((float) $this->search->getResolvedAdapterParameters()['minimumSimilarity']);
+        }
 
         if ([] !== $this->fixedFilters && $this->contextProvider->hasCurrentContext()) {
             $this->contextProvider->getCurrentContext()->setQuery($publicQuery);

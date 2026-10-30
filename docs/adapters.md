@@ -84,3 +84,40 @@ fine only because nothing enables vectors yet (`retrievalMode` defaults to `lexi
 `vectorDimensions` to `null`). Before any app turns vectors on, the fingerprint-keyed
 embedding cache described in the indexing architecture notes needs to land, or every
 mapping change bills the corpus again.
+
+## DuckDB Smart Search
+
+The LiveComponent layout offers Search (existing FTS/text behavior) and Smart
+Search when the DuckDB search declares `vectorColumn`, positive `vectorDimensions`,
+and a `queryEmbedder` implementing `DuckDbQueryEmbedderInterface`. The consuming
+application must only declare these when its selected dataset actually contains
+vectors and must use the same model/revision and prompts that generated them.
+The bridge does not pick an embedding provider or install extensions.
+
+`minimumSimilarity` defaults to 0.3 and is configurable per search. This is a
+cosine similarity cutoff in [-1, 1], not a probability or a universal relevance
+threshold. Tune it for the model and corpus. Visitors can adjust it in Smart
+Search. Query vectors are validated; dimension mismatches and zero/non-finite
+vectors are rejected. No vectors are included in browser state.
+
+Smart Search replaces the lexical text predicate with exact cosine similarity
+at or above the cutoff. It retains the base scope and term/range filters, orders
+by similarity descending (or the selected explicit sort), and uses document ID
+as a stable tie-breaker. Counts and facets use the same semantic predicate as
+hits; facets retain their existing self-excluding filter semantics. Pagination
+uses SQL LIMIT/OFFSET after filtering, without an artificial top-K candidate cap.
+An empty query browses the dataset without requesting an embedding.
+
+`Query::searchMode` (`lexical` or `semantic`), `minimumSimilarity`, page size,
+query text, page, and facets survive URL round trips when URL rewriting is on.
+Other adapters and datasets remain lexical by default. This integration is for
+the server-rendered LiveComponent layout; the separate InstantSearch transport
+is unchanged.
+
+Smart Search opens a description dialog and runs only on submission. The separate
+keyword field remains live as the user types and switches back to lexical mode.
+Both modes retain selected facets. The active smart description is displayed above
+the results; clearing it restores the previous keyword search. Similarity settings
+are available inside the dialog. Natural-language extraction of structured filters
+is not implemented yet: a future interpreter should validate its proposed fields
+and values against the search definition and expose applied filters as editable facets.
