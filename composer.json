@@ -72,6 +72,7 @@
     "suggest": {
         "elasticsearch/elasticsearch": "Needed for the Elasticsearch adapter. Index creation and population belong in survos/elastic-bundle; this client is only required to query.",
         "meilisearch/meilisearch-php": "Needed for the Meilisearch adapter. Index lifecycle lives in survos/meili-bundle.",
-        "algolia/algoliasearch-client-php": "Needed for the Algolia adapter."
+        "algolia/algoliasearch-client-php": "Needed for the Algolia adapter.",
+        "ext-pdo_duckdb": "Native DuckDB PDO driver for local and remote search; FTS requires the DuckDB fts extension."
     }
 }

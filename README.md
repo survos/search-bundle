@@ -205,3 +205,55 @@ value once per root entity, and excludes a facet's own selection from its counts
 Other facets and text search still constrain those counts. This reads metadata into
 PHP for portability across Doctrine databases; large catalogs should use a search
 index or a normalized tag relation instead.
+
+
+## DuckDB dataset search
+
+The `duckdb://<provider>` adapter queries native PDO DuckDB connections. Implement
+`DuckDbConnectionProviderInterface` in the consuming app; `name()` matches the DSN
+suffix and `connect(array $options)` returns a read-only PDO connection. The bundle
+autoconfigures the provider tag. DuckDB is optional for apps using other engines.
+
+Register the adapter under `survos_search.adapters`, then use its name in `AsSearch`.
+Required adapter parameter: `table` (a trusted table name or SQL subquery).
+Additional parameters:
+
+- `connectionOptions`: application-owned selection, such as `datasetCode`.
+- `idColumn` (default `d.id`) and `selectColumns` (default `d.*`).
+- `facetColumns`: facet property to trusted SQL expression, qualified with `d`.
+- `listFacets`: native LIST columns, expanded with `unnest`; duplicate members count once per record.
+- `rangeFacets`: numeric min/max statistics; all-null ranges are omitted from the UI.
+- `sortColumns`: allowed sort keys to trusted SQL expressions.
+- `where` and positional `params`: permanent scope predicates.
+- `textColumns`: literal substring matching when no FTS function is configured.
+- `ftsFunction`: a prebuilt `fts_<schema>_<table>.match_bm25` function. The connection
+  must load `fts`; build the index before opening or publishing a read-only dataset.
+- `maxFacetValues` (default 100): maximum returned terms per facet.
+
+Text and filter values use bound parameters. SQL identifiers and expressions are
+trusted application configuration, never request parameters. Values are ORed within
+a term facet and ANDed across facets. Each facet excludes its own filter while
+retaining text and other filters. Counts cover the full matching dataset, not the
+current page. Default FTS ranking is BM25 descending with a stable ID tie-breaker;
+DuckDB's default FTS term matching is disjunctive, not exact-phrase matching.
+
+For dynamic files, carry a validated `datasetCode` in Layout's read-only `options`
+LiveProp. The search is recreated from these options on every component request.
+A route listener may select the initial context but cannot alone select it for the
+generic Live Component endpoint. Resolve keys through an application registry; do
+not accept arbitrary local paths or remote URIs from the browser. Clear request
+context and cached connections with `ResetInterface` in long-running workers.
+
+Local and S3 connections use the same adapter. Remote providers attach an immutable
+DuckDB file to an in-memory connection with `READ_ONLY` and load `httpfs` and `fts`.
+Keep credentials in connection-scoped secrets, outside the published file.
+
+In debug mode the DuckDB profiler panel records search SQL, bindings, dataset code,
+execution time and failures. It does not record credential setup or connection/
+extension loading. These native PDO calls do not appear in the Doctrine panel.
+
+`Adapter\DuckDb\DuckDbFtsIndexer::build($pdo, $table, $id, $columns)` builds or
+replaces a persisted FTS index on a local writable connection. Install the DuckDB
+`fts` extension beforehand. The caller owns staging, transactions, checkpointing
+and publication. Folio-specific DTO projection stays in folio-bundle; this service
+has no folio dependency.

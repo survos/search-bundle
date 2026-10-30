@@ -123,11 +123,19 @@ final class SurvosSearchBundle extends AbstractUxBundle
             $definition->addTag('survos_search.search', $tagAttributes);
             $definition->addTag('kernel.reset', ['method' => 'reset']);
         });
+        $builder->registerForAutoconfiguration(Adapter\DuckDb\DuckDbConnectionProviderInterface::class)->addTag('survos_search.duckdb_connection');
         $builder->registerForAutoconfiguration(AdapterFactoryInterface::class)->addTag('survos_search.adapter_factory');
         $builder->registerForAutoconfiguration(ParameterTranslatorInterface::class)->addTag('survos_search.parameter_translator');
         $builder->registerForAutoconfiguration(UrlFormaterInterface::class)->addTag('survos_search.url_formater');
 
         $services = $container->services()->defaults()->autowire()->autoconfigure();
+        $services->set(Adapter\DuckDb\DuckDbFactory::class);
+        $services->set(Adapter\DuckDb\DuckDbFtsIndexer::class);
+        if ($builder->getParameter('kernel.debug')) {
+            $services->set(Profiler\DuckDbQueryRecorder::class);
+            $services->set(Profiler\DuckDbDataCollector::class)
+                ->tag('data_collector', ['id' => 'survos_duckdb', 'template' => '@SurvosSearch/Profiler/duckdb.html.twig']);
+        }
         $services->set(Http\InstantSearchGateway::class)->arg('$allowedSearches', $config['public_searches']);
         $services->set(Controller\InstantSearchController::class)->tag('controller.service_arguments');
         $services

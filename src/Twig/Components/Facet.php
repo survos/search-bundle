@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Twig\Components;
 
 use Survos\SearchBundle\Context\ContextProvider;
+use Survos\SearchBundle\Twig\Components\Facet\AbstractFacet;
 use Survos\SearchBundle\Twig\Components\Facet\RefinementList;
 use Symfony\UX\TwigComponent\Attribute\ExposeInTemplate;
 
@@ -24,6 +25,15 @@ class Facet
     public function __construct(
         private readonly ContextProvider $contextProvider,
     ) {
+    }
+
+    #[ExposeInTemplate]
+    public function getRenderable(): bool
+    {
+        $component = $this->getComponent();
+
+        return !is_a($component, AbstractFacet::class, true) || !$component::usesFacetStats()
+            || isset($this->contextProvider->getCurrentContext()->getResults()->getFacetStats()[$this->property]);
     }
 
     #[ExposeInTemplate]
