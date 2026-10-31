@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Survos\SearchBundle\Adapter\DuckDb;
 
-/** The application selects the matching model/revision and caches query embeddings. */
-interface DuckDbQueryEmbedderInterface
+use Survos\SearchBundle\Contract\QueryEmbedderInterface;
+
+/** @deprecated Implement the storage-independent QueryEmbedderInterface instead. */
+interface DuckDbQueryEmbedderInterface extends QueryEmbedderInterface
 {
-    /** @return list<float> */
-    public function embedQuery(string $text): array;
 }

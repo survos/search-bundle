@@ -53,7 +53,7 @@ trait DbalAdapterTrait
         // A closure (textMatcher) cannot be serialized and says nothing the rest does not: it is
         // built from the same folio the other parameters already name.
         $dataSource = serialize(array_map(
-            static fn (mixed $value): mixed => $value instanceof \Closure ? 'closure' : $value,
+            static fn (mixed $value): mixed => is_object($value) ? [$value::class, spl_object_id($value)] : $value,
             $search->getResolvedAdapterParameters(),
         ));
 
@@ -61,7 +61,7 @@ trait DbalAdapterTrait
             'survos_search_facet.%s.%s.%s.%s',
             $kind,
             substr(md5($dataSource), 0, 16),
-            md5($query->getQueryString()),
+            md5(serialize([$query->getQueryString(), $query->getSearchMode(), $query->getMinimumSimilarity()])),
             md5(serialize($filters)),
         );
 

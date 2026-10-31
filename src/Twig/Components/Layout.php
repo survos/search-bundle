@@ -174,11 +174,7 @@ class Layout
 
     public function getSmartSearchAvailable(): bool
     {
-        $p = $this->search?->getResolvedAdapterParameters() ?? [];
-
-        return ($p['smartSearchAvailable'] ?? false)
-            || (!empty($p['vectorColumn']) && ($p['vectorDimensions'] ?? 0) > 0
-                && ($p['queryEmbedder'] ?? null) instanceof \Survos\SearchBundle\Adapter\DuckDb\DuckDbQueryEmbedderInterface);
+        return null !== $this->search && $this->searcher->supportsSemanticSearch($this->search);
     }
 
     #[LiveAction]

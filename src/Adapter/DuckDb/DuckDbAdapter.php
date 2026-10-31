@@ -17,7 +17,7 @@ use Survos\SearchBundle\Search\SearchInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /** Native PDO queries. SQL expressions are trusted application configuration, never request data. */
-final readonly class DuckDbAdapter implements AdapterInterface
+final readonly class DuckDbAdapter implements AdapterInterface, \Survos\SearchBundle\Adapter\SemanticSearchAdapterInterface
 {
     public function __construct(private \PDO|DuckDbConnectionProviderInterface $connection, private ?DuckDbQueryRecorder $recorder = null)
     {
@@ -25,8 +25,6 @@ final readonly class DuckDbAdapter implements AdapterInterface
 
     public function configureParameters(OptionsResolver $resolver): void
     {
-        $resolver->setDefault('vectorCoverage', null);
-        $resolver->setAllowedTypes('vectorCoverage', ['null', 'array']);
         $resolver->setRequired('table');
         $resolver->setAllowedTypes('table', 'string');
         foreach ([
@@ -37,13 +35,13 @@ final readonly class DuckDbAdapter implements AdapterInterface
         ] as $key => $value) {
             $resolver->setDefault($key, $value)->setAllowedTypes($key, get_debug_type($value));
         }
-        $resolver->setDefaults(['vectorColumn' => '', 'vectorDimensions' => 0, 'minimumSimilarity' => 0.3, 'queryEmbedder' => null]);
-        $resolver->setAllowedTypes('vectorColumn', 'string');
-        $resolver->setAllowedTypes('vectorDimensions', 'int');
-        $resolver->setAllowedTypes('minimumSimilarity', ['int', 'float']);
-        $resolver->setAllowedValues('minimumSimilarity', static fn ($v): bool => is_finite($v) && $v >= -1 && $v <= 1);
-        $resolver->setAllowedTypes('queryEmbedder', ['null', DuckDbQueryEmbedderInterface::class]);
+        \Survos\SearchBundle\Search\VectorSearch::configure($resolver);
         $resolver->setAllowedValues('maxFacetValues', static fn (int $value): bool => $value >= 1 && $value <= 10000);
+    }
+
+    public function supportsSemanticSearch(SearchInterface $search): bool
+    {
+        return \Survos\SearchBundle\Search\VectorSearch::available($search->getResolvedAdapterParameters());
     }
 
     public function search(Query $query, SearchInterface $search): ResultSet
@@ -113,24 +111,12 @@ final readonly class DuckDbAdapter implements AdapterInterface
         $predicate = '';
         $score = '0.0';
         if ('semantic' === $query->getSearchMode()) {
-            if ('' === $p['vectorColumn'] || $p['vectorDimensions'] < 1 || null === $p['queryEmbedder']) {
+            if (!\Survos\SearchBundle\Search\VectorSearch::available($p)) {
                 throw new \LogicException('Smart Search is not available for this dataset.');
             }
             if ('' !== $text) {
                 $vector = $p['queryEmbedder']->embedQuery($text);
-                if (!array_is_list($vector) || count($vector) !== $p['vectorDimensions']) {
-                    throw new \InvalidArgumentException('Query embedding dimensions do not match the dataset.');
-                }
-                $norm = 0.0;
-                foreach ($vector as $value) {
-                    if ((!is_float($value) && !is_int($value)) || !is_finite($value)) {
-                        throw new \InvalidArgumentException('Query vector must contain finite numbers.');
-                    }
-                    $norm += $value * $value;
-                }
-                if (!is_finite($norm) || $norm <= 0) {
-                    throw new \InvalidArgumentException('Query vector must have a finite nonzero norm.');
-                }
+                \Survos\SearchBundle\Search\VectorSearch::validate($vector, $p['vectorDimensions']);
                 // DuckDB 2.0 array statistics can fail when a prepared array score is filtered.
                 // The list function computes the same cosine similarity; dimensions were checked above.
                 $score = 'list_cosine_similarity('.$p['vectorColumn'].', CAST(? AS DOUBLE[]))';

@@ -21,7 +21,7 @@ final readonly class PostgresBm25Factory implements AdapterFactoryInterface
 
     public function support(string $dsn): bool
     {
-        return str_starts_with($dsn, 'postgres-bm25://') || str_starts_with($dsn, 'pgsql-bm25://');
+        return str_starts_with($dsn, 'postgres-vector://') || str_starts_with($dsn, 'postgres-bm25://') || str_starts_with($dsn, 'pgsql-bm25://');
     }
 
     public function createAdapter(string $dsn): AdapterInterface

@@ -85,11 +85,12 @@ fine only because nothing enables vectors yet (`retrievalMode` defaults to `lexi
 embedding cache described in the indexing architecture notes needs to land, or every
 mapping change bills the corpus again.
 
-## DuckDB Smart Search
+## Backend-independent Smart Search
 
 The LiveComponent layout offers Search (existing FTS/text behavior) and Smart
-Search when the DuckDB search declares `vectorColumn`, positive `vectorDimensions`,
-and a `queryEmbedder` implementing `DuckDbQueryEmbedderInterface`. The consuming
+Search when a DuckDB or PostgreSQL search declares `vectorColumn`, positive `vectorDimensions`,
+and a `queryEmbedder` implementing `QueryEmbedderInterface`. The old
+`DuckDbQueryEmbedderInterface` extends this contract for compatibility. The consuming
 application must only declare these when its selected dataset actually contains
 vectors and must use the same model/revision and prompts that generated them.
 The bridge does not pick an embedding provider or install extensions.
@@ -121,3 +122,27 @@ the results; clearing it restores the previous keyword search. Similarity settin
 are available inside the dialog. Natural-language extraction of structured filters
 is not implemented yet: a future interpreter should validate its proposed fields
 and values against the search definition and expose applied filters as editable facets.
+
+### PostgreSQL and portable vectors
+
+Use `postgres-vector://connection_name` with a Doctrine DBAL PostgreSQL connection
+and the pgvector extension installed in that database. This uses the existing
+PostgreSQL adapter, with `vectorColumn` pointing to a pgvector column. Keep its
+`matchExpression` and `scoreExpression` for lexical search; they may use native
+PostgreSQL FTS rather than a BM25 extension. Semantic search uses exact cosine
+distance (`<=>`) and does not require an approximate vector index. Configure
+`facetColumns` and `sortColumns` explicitly; semantic requests reject unknown filters.
+
+Adapters advertise availability through `SemanticSearchAdapterInterface`. The
+layout and query embedder contract do not depend on DuckDB. Unsupported adapters
+reject semantic requests instead of silently returning lexical results. Existing
+Doctrine searches using an application semantic hook can retain
+`smartSearchAvailable`. Elasticsearch's legacy retrieval modes are separate;
+its shared Smart Search implementation and Meilisearch support remain future work.
+
+Reuse persisted vectors across backends using `EmbeddingProfile`: model,
+dimensions, revision, and text preprocessing version are part of its fingerprint,
+together with the exact embedding input. Equal dimensions alone do not establish
+compatibility. A projection must validate this fingerprint and vector dimensions
+before copying a stored vector. Applications own persistence and cache lookup;
+the shared contract does not automatically intercept every indexing command.

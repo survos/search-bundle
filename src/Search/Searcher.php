@@ -30,6 +30,17 @@ readonly class Searcher
     ) {
     }
 
+    public function supportsSemanticSearch(SearchInterface $search): bool
+    {
+        $adapter = $this->adapterProvider->getAdapter($search->getAdapterName());
+        if ($adapter instanceof \Survos\SearchBundle\Adapter\SemanticSearchAdapterInterface) {
+            return $adapter->supportsSemanticSearch($search);
+        }
+
+        // Existing Doctrine searches can supply their own semantic predicate hook.
+        return (bool) ($search->getResolvedAdapterParameters()['smartSearchAvailable'] ?? false);
+    }
+
     public function search(Query $query, SearchInterface $search): ResultSet\ResultSet
     {
         $searchEventDispatcher = $search->getEventDispatcher();
@@ -47,6 +58,10 @@ readonly class Searcher
         $optionResolver = new OptionsResolver();
         $adapter->configureParameters($optionResolver);
         $search->setResolvedAdapterParameters($optionResolver->resolve($search->getAdapterParameters()));
+
+        if ('semantic' === $query->getSearchMode() && !$this->supportsSemanticSearch($search)) {
+            throw new \LogicException('Smart Search is not available for this dataset and adapter.');
+        }
 
         $results = $adapter->search($query, $search);
 

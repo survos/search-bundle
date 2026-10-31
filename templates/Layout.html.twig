@@ -16,7 +16,7 @@
                         {% if this.smartSearchAvailable %}
                             {% set coverage = search.resolvedAdapterParameters.vectorCoverage ?? null %}
                             {% if coverage and coverage.indexed < coverage.total %}
-                                <p class="small text-muted">Smart Search pilot: {{ coverage.indexed }} of {{ coverage.total }} records have embeddings. Keyword search covers the full collection.</p>
+                                <p class="small text-muted">Smart Search coverage: {{ coverage.indexed }} of {{ coverage.total }} records have embeddings. Keyword search covers the full collection.</p>
                             {% endif %}
                             <div class="d-flex gap-2 align-items-center">
                                 <input type="search" class="ux-search-search-input ux-search-input form-control" data-model="debounce(400)|keywordQuery" placeholder="{{ 'search.placeholder'|trans(domain='survos_search') }}" aria-label="Keyword search">

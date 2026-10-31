@@ -18,7 +18,7 @@ use Survos\SearchBundle\Search\SearchInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Contracts\Cache\CacheInterface;
 
-final readonly class PostgresBm25Adapter implements AdapterInterface
+final readonly class PostgresBm25Adapter implements AdapterInterface, \Survos\SearchBundle\Adapter\SemanticSearchAdapterInterface
 {
     use DbalAdapterTrait;
 
@@ -30,6 +30,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
 
     public function configureParameters(OptionsResolver $resolver): void
     {
+        \Survos\SearchBundle\Search\VectorSearch::configure($resolver);
         $resolver->setDefaults([
             'idColumn' => 'id',
             'selectColumns' => [],
@@ -61,9 +62,20 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
         $resolver->setAllowedTypes('scoreThreshold', ['int', 'float']);
     }
 
+    public function supportsSemanticSearch(SearchInterface $search): bool
+    {
+        return \Survos\SearchBundle\Search\VectorSearch::available($search->getResolvedAdapterParameters());
+    }
+
     public function search(Query $query, SearchInterface $search): ResultSet
     {
-        $params = $search->getResolvedAdapterParameter('params');
+        foreach ($query->getActiveFilters() as $filter) {
+            if ('semantic' === $query->getSearchMode() && !array_key_exists($filter->getProperty(), $search->getResolvedAdapterParameter('facetColumns'))) {
+                throw new \InvalidArgumentException('Unknown PostgreSQL facet/filter: '.$filter->getProperty());
+            }
+        }
+        $baseParams = $this->queryParameters($query, $search);
+        $params = $baseParams;
         $where = $this->baseWhere($query, $search, $params);
         $this->applyFilters($query, $search, $where, $params);
 
@@ -72,9 +84,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
         $params['limit'] = $limit;
         $params['offset'] = $offset;
 
-        $scoreExpression = '' === $query->getQueryString()
-            ? '0'
-            : $search->getResolvedAdapterParameter('scoreExpression');
+        $scoreExpression = $this->scoreExpression($query, $search);
 
         $sql = sprintf(
             'SELECT %s, %s AS _score FROM %s d%s %s LIMIT :limit OFFSET :offset',
@@ -101,8 +111,8 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
             ->setIndexUid($search->getIndexName())
             ->setHits($hits)
             ->setTotalResults((int) $this->connection->executeQuery($countSql, $params)->fetchOne())
-            ->setFacetDistributions($this->cachedFacetCompute($this->facetCache, 'distributions', $query, $search, fn () => $this->facetDistributions($query, $search)))
-            ->setFacetStats($this->cachedFacetCompute($this->facetCache, 'stats', $query, $search, fn () => $this->facetStats($query, $search)));
+            ->setFacetDistributions($this->cachedFacetCompute('semantic' === $query->getSearchMode() ? null : $this->facetCache, 'distributions', $query, $search, fn () => $this->facetDistributions($query, $search, $baseParams)))
+            ->setFacetStats($this->cachedFacetCompute('semantic' === $query->getSearchMode() ? null : $this->facetCache, 'stats', $query, $search, fn () => $this->facetStats($query, $search, $baseParams)));
     }
 
     /**
@@ -115,6 +125,14 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
         $where = [];
         if (is_string($search->getResolvedAdapterParameter('where'))) {
             $where[] = $search->getResolvedAdapterParameter('where');
+        }
+
+        if ('semantic' === $query->getSearchMode()) {
+            if ('' !== trim($query->getQueryString())) {
+                $where[] = $this->scoreExpression($query, $search).' >= :vectorMinimumSimilarity';
+            }
+
+            return $where;
         }
 
         if ('' !== $query->getQueryString()) {
@@ -131,33 +149,67 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
         return $where;
     }
 
+    private function queryParameters(Query $query, SearchInterface $search): array
+    {
+        $params = $search->getResolvedAdapterParameter('params');
+        if ('semantic' !== $query->getSearchMode()) {
+            return $params;
+        }
+        if (!$this->supportsSemanticSearch($search)) {
+            throw new \LogicException('Smart Search is not available for this dataset.');
+        }
+        if ('' !== trim($query->getQueryString())) {
+            $p = $search->getResolvedAdapterParameters();
+            $vector = $p['queryEmbedder']->embedQuery(trim($query->getQueryString()));
+            \Survos\SearchBundle\Search\VectorSearch::validate($vector, $p['vectorDimensions']);
+            $params['vectorQuery'] = json_encode($vector, JSON_THROW_ON_ERROR);
+            $params['vectorMinimumSimilarity'] = $query->getMinimumSimilarity() ?? $p['minimumSimilarity'];
+        }
+
+        return $params;
+    }
+
+    private function scoreExpression(Query $query, SearchInterface $search): string
+    {
+        if ('' === trim($query->getQueryString())) {
+            return '0';
+        }
+        if ('semantic' === $query->getSearchMode()) {
+            return '(1 - ('.$search->getResolvedAdapterParameter('vectorColumn').' <=> CAST(:vectorQuery AS vector)))';
+        }
+
+        return $search->getResolvedAdapterParameter('scoreExpression');
+    }
+
     private function orderBy(Query $query, SearchInterface $search): string
     {
-        // With a text query, order by relevance: it uses the FTS index, whereas a
-        // column sort (e.g. created_at) makes the planner abandon the index and
-        // recompute the match for every row. Browse (no query) uses the column sort.
-        if ('' !== $query->getQueryString()) {
-            return 'ORDER BY _score DESC';
-        }
-
+        $id = 'd.'.$this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('idColumn'));
         $activeSort = $query->getActiveSort();
-        if (is_string($activeSort) && str_contains($activeSort, ':')) {
-            [$property, $direction] = explode(':', $activeSort, 2);
-            $sortColumns = $search->getResolvedAdapterParameter('sortColumns');
-            $column = is_array($sortColumns) && isset($sortColumns[$property]) ? $sortColumns[$property] : null;
-            $direction = strtoupper($direction);
-            if (is_string($column) && in_array($direction, ['ASC', 'DESC'], true)) {
-                return sprintf('ORDER BY %s %s', $column, $direction);
+        // Existing lexical BM25 searches keep their relevance-first behavior.
+        if ('semantic' !== $query->getSearchMode() && '' !== $query->getQueryString()) {
+            return 'ORDER BY _score DESC, '.$id;
+        }
+        if (is_string($activeSort) && '' !== $activeSort) {
+            if (!str_contains($activeSort, ':')) {
+                throw new \InvalidArgumentException('Unknown PostgreSQL sort: '.$activeSort);
             }
+            [$property, $direction] = explode(':', $activeSort, 2);
+            $column = $search->getResolvedAdapterParameter('sortColumns')[$property] ?? null;
+            $direction = strtoupper($direction);
+            if (!is_string($column) || !in_array($direction, ['ASC', 'DESC'], true)) {
+                throw new \InvalidArgumentException('Unknown PostgreSQL sort: '.$activeSort);
+            }
+
+            return sprintf('ORDER BY %s %s, %s', $column, $direction, $id);
         }
 
-        return '';
+        return 'ORDER BY '.('' !== trim($query->getQueryString()) ? '_score DESC, ' : '').$id;
     }
 
     /**
      * @return array<string, FacetTermDistribution>
      */
-    private function facetDistributions(Query $query, SearchInterface $search): array
+    private function facetDistributions(Query $query, SearchInterface $search, array $baseParams): array
     {
         $distributions = [];
         foreach ($search->getFacets() as $facet) {
@@ -165,13 +217,13 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
             $checkedValues = $filter instanceof TermFilter ? $filter->getValues() : [];
             $column = $this->columnFor($search, 'facetColumns', $facet->getProperty());
 
-            $params = $search->getResolvedAdapterParameter('params');
+            $params = $baseParams;
             $where = $this->baseWhere($query, $search, $params);
             $this->applyFilters($query, $search, $where, $params, $facet->getProperty());
             $params['maxFacetValues'] = $search->getResolvedAdapterParameter('maxFacetValues');
 
             $sql = sprintf(
-                'SELECT %s AS value, COUNT(*) AS total FROM %s d%s GROUP BY %s ORDER BY total DESC LIMIT :maxFacetValues',
+                'SELECT %s AS value, COUNT(*) AS total FROM %s d%s GROUP BY %s ORDER BY total DESC, value LIMIT :maxFacetValues',
                 $column,
                 $this->connection->quoteSingleIdentifier($search->getResolvedAdapterParameter('table')),
                 [] === $where ? '' : ' WHERE '.implode(' AND ', $where),
@@ -197,7 +249,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
     /**
      * @return array<string, FacetStat>
      */
-    private function facetStats(Query $query, SearchInterface $search): array
+    private function facetStats(Query $query, SearchInterface $search, array $baseParams): array
     {
         $stats = [];
         foreach ($search->getFacets() as $facet) {
@@ -210,7 +262,7 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
 
             $filter = $query->getActiveFilter($facet->getProperty());
             $column = $this->columnFor($search, 'facetColumns', $facet->getProperty());
-            $params = $search->getResolvedAdapterParameter('params');
+            $params = $baseParams;
             $where = $this->baseWhere($query, $search, $params);
             $this->applyFilters($query, $search, $where, $params, $facet->getProperty());
 
@@ -230,6 +282,9 @@ final readonly class PostgresBm25Adapter implements AdapterInterface
             $min = $row['min_value'];
             $max = $row['max_value'];
             if (null === $min || null === $max) {
+                if ('semantic' === $query->getSearchMode()) {
+                    continue;
+                }
                 $min = 0;
                 $max = 0;
             }
