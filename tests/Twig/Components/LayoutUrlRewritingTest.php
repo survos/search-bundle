@@ -150,6 +150,30 @@ final class LayoutUrlRewritingTest extends TestCase
         self::assertTrue($layout->query->hasActiveFilter('category'));
     }
 
+    public function testSmartDraftDoesNotRunUntilSubmittedAndSurvivesRerender(): void
+    {
+        $layout = $this->createLayout(enabled: false);
+        $layout->onInitialMount(['name' => 'listing', 'initialQuery' => ['query' => 'phone']]);
+        $layout->name = 'listing';
+        $id = $layout->searchUiId;
+        $layout->searchTab = 'semantic';
+        $layout->smartQuery = 'objects for making music';
+        $layout->onReRender();
+        self::assertSame('lexical', DummySearcherState::$lastQuery->getSearchMode());
+        self::assertSame('phone', DummySearcherState::$lastQuery->getQueryString());
+        self::assertSame('semantic', $layout->searchTab);
+        self::assertSame('objects for making music', $layout->smartQuery);
+        self::assertSame($id, $layout->searchUiId);
+        $layout->submitSmartSearch($layout->smartQuery);
+        $layout->onReRender();
+        self::assertSame('semantic', DummySearcherState::$lastQuery->getSearchMode());
+        self::assertSame('objects for making music', DummySearcherState::$lastQuery->getQueryString());
+        $layout->clearSmartSearch();
+        self::assertSame('lexical', $layout->searchTab);
+        self::assertSame('phone', $layout->query->getQueryString());
+        self::assertSame('objects for making music', $layout->smartQuery);
+    }
+
     private function createLayout(bool $enabled): TestableLayout
     {
         $search = new class extends AbstractSearch {
@@ -223,6 +247,11 @@ final class DummySearcherState
 
 readonly class DummySearcher extends BaseSearcher
 {
+    public function supportsSemanticSearch(SearchInterface $search): bool
+    {
+        return false;
+    }
+
     public function __construct()
     {
     }

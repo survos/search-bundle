@@ -12,6 +12,17 @@
 declare(strict_types=1);
 
 return [
+    'mode.label' => 'Search mode',
+    'mode.instant' => 'Instant Search',
+    'mode.smart' => 'Smart Search',
+    'mode.describe' => 'Describe what you are looking for',
+    'mode.placeholder' => 'Describe the subjects, themes, or kinds of records you want to find',
+    'mode.submit_hint' => 'Press Search when ready. Your selected filters still apply.',
+    'mode.settings' => 'Search settings',
+    'mode.similarity' => 'Minimum similarity',
+    'mode.error' => 'Search could not be completed. Please try again.',
+    'mode.search' => 'Search',
+    'mode.active' => 'Searching for: %query%',
     'go' => 'Go',
     'show_more' => 'Show more',
     'show_less' => 'Show less',

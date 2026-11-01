@@ -18,36 +18,43 @@
                             {% if coverage and coverage.indexed < coverage.total %}
                                 <p class="small text-muted">Smart Search coverage: {{ coverage.indexed }} of {{ coverage.total }} records have embeddings. Keyword search covers the full collection.</p>
                             {% endif %}
-                            <div class="d-flex gap-2 align-items-center">
-                                <input type="search" class="ux-search-search-input ux-search-input form-control" data-model="debounce(400)|keywordQuery" placeholder="{{ 'search.placeholder'|trans(domain='survos_search') }}" aria-label="Keyword search">
-                                <button type="button" class="btn btn-outline-primary text-nowrap" {{ stimulus_action(_sc, 'openSmartSearch') }}>Smart Search</button>
+                            <div class="nav nav-tabs mb-3" role="tablist" aria-label="{{ 'mode.label'|trans(domain='survos_search') }}">
+                                {% for mode, label in {lexical: 'mode.instant', semantic: 'mode.smart'} %}
+                                    <button type="button" class="nav-link{{ this.searchTab == mode ? ' active' : '' }}" role="tab"
+                                            id="{{ this.searchUiId }}-{{ mode }}-tab" aria-controls="{{ this.searchUiId }}-{{ mode }}-panel"
+                                            aria-selected="{{ this.searchTab == mode ? 'true' : 'false' }}" tabindex="{{ this.searchTab == mode ? '0' : '-1' }}"
+                                            data-search-tab="{{ mode }}" {{ stimulus_target(_sc, 'modeTab') }}
+                                            {{ stimulus_action(_sc, 'selectSearchTab')|stimulus_action(_sc, 'selectSearchTab', 'keydown') }}>
+                                        {{ label|trans(domain='survos_search') }}
+                                    </button>
+                                {% endfor %}
                             </div>
-                            {% if query.searchMode == 'semantic' %}
-                                <div class="d-flex gap-2 align-items-center mt-2 flex-wrap" role="status">
-                                    <span><strong>Smart Search:</strong> {{ query.queryString }}</span>
-                                    <button type="button" class="btn btn-sm btn-link" data-action="live#action" data-live-action-param="clearSmartSearch">Clear Smart Search</button>
-                                </div>
-                            {% endif %}
-                            <dialog class="ux-search-smart-dialog" {{ stimulus_target(_sc, 'smartDialog') }} aria-label="Smart Search">
+                            <div role="tabpanel" id="{{ this.searchUiId }}-lexical-panel" aria-labelledby="{{ this.searchUiId }}-lexical-tab"
+                                 data-search-panel="lexical" {{ stimulus_target(_sc, 'modePanel') }} {{ this.searchTab != 'lexical' ? 'hidden' : '' }}>
+                                <input type="search" class="ux-search-search-input ux-search-input form-control" data-model="debounce(400)|keywordQuery"
+                                       value="{{ this.keywordQuery }}" placeholder="{{ 'search.placeholder'|trans(domain='survos_search') }}" aria-label="{{ 'mode.instant'|trans(domain='survos_search') }}">
+                            </div>
+                            <div role="tabpanel" id="{{ this.searchUiId }}-semantic-panel" aria-labelledby="{{ this.searchUiId }}-semantic-tab"
+                                 data-search-panel="semantic" {{ stimulus_target(_sc, 'modePanel') }} {{ this.searchTab != 'semantic' ? 'hidden' : '' }}>
                                 <form {{ stimulus_action(_sc, 'submitSmartSearch', 'submit') }}>
-                                    <h2 class="h3">What are you looking for?</h2>
-                                    <p class="text-muted">Describe what you have in mind. Your selected filters will still apply.</p>
-                                    <label class="form-label w-100">Describe your search
-                                        <textarea class="form-control mt-2" name="description" rows="4" required maxlength="2000" placeholder="Describe the subjects, themes, or kinds of records you want to find">{{ query.searchMode == 'semantic' ? query.queryString : '' }}</textarea>
+                                    <label class="form-label w-100">{{ 'mode.describe'|trans(domain='survos_search') }}
+                                        <textarea class="form-control mt-2" name="description" rows="3" required maxlength="2000"
+                                                  data-model="norender|smartQuery" placeholder="{{ 'mode.placeholder'|trans(domain='survos_search') }}">{{ this.smartQuery }}</textarea>
                                     </label>
+                                    <p class="text-muted small">{{ 'mode.submit_hint'|trans(domain='survos_search') }}</p>
                                     <details class="my-3">
-                                        <summary>Search settings</summary>
-                                        <label class="form-label mt-2">Minimum similarity
+                                        <summary>{{ 'mode.settings'|trans(domain='survos_search') }}</summary>
+                                        <label class="form-label mt-2">{{ 'mode.similarity'|trans(domain='survos_search') }}
                                             <input type="number" min="-1" max="1" step="0.05" class="form-control" data-model="norender|query.minimumSimilarity" value="{{ query.minimumSimilarity ?? search.resolvedAdapterParameters.minimumSimilarity }}">
                                         </label>
                                     </details>
-                                    <p class="text-danger" {{ stimulus_target(_sc, 'smartError') }} hidden>Search could not be completed. Please try again.</p>
-                                    <div class="d-flex justify-content-end gap-2">
-                                        <button type="button" class="btn btn-outline-secondary" {{ stimulus_action(_sc, 'closeSmartSearch') }}>Cancel</button>
-                                        <button type="submit" class="btn btn-primary">Find matches</button>
-                                    </div>
+                                    <p class="text-danger" {{ stimulus_target(_sc, 'smartError') }} hidden>{{ 'mode.error'|trans(domain='survos_search') }}</p>
+                                    <button type="submit" class="btn btn-primary">{{ 'mode.search'|trans(domain='survos_search') }}</button>
+                                    {% if query.searchMode == 'semantic' %}
+                                        <p class="small mt-2" role="status">{{ 'mode.active'|trans({'%query%': query.queryString}, domain='survos_search') }}</p>
+                                    {% endif %}
                                 </form>
-                            </dialog>
+                            </div>
                         {% else %}
                             <twig:Survos:Search:SearchInput />
                         {% endif %}

@@ -49,8 +49,18 @@ class Layout
     #[LiveProp(writable: true, onUpdated: 'updateKeywordSearch')]
     public string $keywordQuery = '';
 
+    #[LiveProp(writable: true)]
+    public string $searchTab = 'lexical';
+
+    #[LiveProp(writable: true)]
+    public string $smartQuery = '';
+
+    #[LiveProp]
+    public string $searchUiId = '';
+
     public function updateKeywordSearch(): void
     {
+        $this->searchTab = 'lexical';
         $this->query->setSearchMode('lexical')->setQueryString($this->keywordQuery)->setCurrentPage(1);
     }
 
@@ -61,6 +71,8 @@ class Layout
         if ('' === $description) {
             return;
         }
+        $this->searchTab = 'semantic';
+        $this->smartQuery = $description;
         $this->query->setSearchMode('semantic')->setQueryString($description)->setCurrentPage(1);
     }
 
@@ -150,6 +162,11 @@ class Layout
             }
         }
 
+        $this->searchUiId = 'ux-search-'.bin2hex(random_bytes(6));
+        $this->searchTab = $this->query->getSearchMode();
+        if ('semantic' === $this->searchTab) {
+            $this->smartQuery = $this->query->getQueryString();
+        }
         if ('lexical' === $this->query->getSearchMode()) {
             $this->keywordQuery = $this->query->getQueryString() ?? '';
         }

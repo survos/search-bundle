@@ -2,15 +2,36 @@ import { Controller } from '@hotwired/stimulus';
 import { getComponent } from '@symfony/ux-live-component';
 
 class controller extends Controller {
-    static targets = ['smartDialog', 'smartError'];
+    static targets = ['modeTab', 'modePanel', 'smartError'];
 
-    openSmartSearch() {
-        this.smartErrorTarget.hidden = true;
-        this.smartDialogTarget.showModal();
-        this.smartDialogTarget.querySelector('textarea').focus();
-    }
-    closeSmartSearch() {
-        this.smartDialogTarget.close();
+    async selectSearchTab(event) {
+        let tab = event.currentTarget;
+        if (event.type === 'keydown') {
+            const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+            if (!keys.includes(event.key)) return;
+            event.preventDefault();
+            const current = this.modeTabTargets.indexOf(tab);
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? this.modeTabTargets.length - 1
+                : (current + (event.key === 'ArrowRight' ? 1 : -1) + this.modeTabTargets.length) % this.modeTabTargets.length;
+            tab = this.modeTabTargets[next];
+        }
+        const mode = tab.dataset.searchTab;
+        // Update both the live prop and the DOM in either direction. Otherwise an
+        // unsent semantic-tab change can survive the return-to-keywords response.
+        this.component.set('searchTab', mode);
+        this.modeTabTargets.forEach((item) => {
+            const active = item.dataset.searchTab === mode;
+            item.classList.toggle('active', active);
+            item.setAttribute('aria-selected', active ? 'true' : 'false');
+            item.tabIndex = active ? 0 : -1;
+        });
+        this.modePanelTargets.forEach((panel) => { panel.hidden = panel.dataset.searchPanel !== mode; });
+        if (mode === 'lexical') {
+            await this.component.action('clearSmartSearch');
+        }
+        // Selecting Smart Search only changes tabs; its draft waits for Search.
+        const selected = this.modeTabTargets.find((item) => item.dataset.searchTab === mode);
+        selected?.focus();
     }
     async submitSmartSearch(event) {
         event.preventDefault();
@@ -23,7 +44,6 @@ class controller extends Controller {
         try {
             const component = await getComponent(this.element);
             await component.action('submitSmartSearch', { description });
-            this.closeSmartSearch();
         } catch (error) {
             this.smartErrorTarget.hidden = false;
         } finally {
