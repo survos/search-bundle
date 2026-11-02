@@ -40,6 +40,9 @@ readonly class DoctrineAdapter implements AdapterInterface
 
     public const string SEARCH_FIELDS = 'searchFields';
 
+    /** Optional Closure(QueryBuilder, field path, parameter name): ?string DQL predicate. */
+    public const string SEARCH_FIELD_PREDICATE = 'searchFieldPredicate';
+
     /** property => Closure(QueryBuilder): array<entity-id, list<string>>; for bounded catalogs. */
     public const string MULTI_VALUE_FACETS = 'multiValueFacets';
 
@@ -119,6 +122,7 @@ readonly class DoctrineAdapter implements AdapterInterface
             self::QUERY_BUILDER_ALIAS => 'o',
             self::QUERY_BUILDER => static function (QueryBuilder $queryBuilder) {},
             self::SEARCH_FIELDS => [],
+            self::SEARCH_FIELD_PREDICATE => null,
             self::MULTI_VALUE_FACETS => [],
             self::COUNT_DISTINCT => true,
             self::FETCH_JOIN_COLLECTION => true,
@@ -128,6 +132,7 @@ readonly class DoctrineAdapter implements AdapterInterface
         $resolver->setAllowedTypes(self::QUERY_BUILDER_ALIAS, 'string');
         $resolver->setAllowedTypes(self::QUERY_BUILDER, 'Closure');
         $resolver->setAllowedTypes(self::SEARCH_FIELDS, 'string[]');
+        $resolver->setAllowedTypes(self::SEARCH_FIELD_PREDICATE, ['null', 'Closure']);
         $resolver->setAllowedTypes(self::MULTI_VALUE_FACETS, 'array');
         $resolver->setAllowedTypes(self::COUNT_DISTINCT, 'bool');
         $resolver->setAllowedTypes(self::FETCH_JOIN_COLLECTION, 'bool');

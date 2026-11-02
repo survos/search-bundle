@@ -303,8 +303,9 @@ readonly class QueryBuilderHelper
         }
 
         $orX = $qb->expr()->orX();
+        $predicate = $this->search->getResolvedAdapterParameters()[DoctrineAdapter::SEARCH_FIELD_PREDICATE] ?? null;
         foreach ($fields as $fieldName) {
-            $orX->add(\sprintf('%s like :queryString', $fieldName));
+            $orX->add($predicate?->__invoke($qb, $fieldName, 'queryString') ?? \sprintf('%s like :queryString', $fieldName));
         }
 
         $qb->andWhere($orX);

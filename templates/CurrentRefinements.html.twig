@@ -7,7 +7,7 @@
                 {% if ux_search_is_term_filter(active_filter) %}
                     {% for value in active_filter.values %}
                         <li class="ux-search-current-refinements__item">
-                            <span class="ux-search-current-refinements__value">{{ value }}</span>
+                            <span class="ux-search-current-refinements__value">{% block term_label %}{{ value }}{% endblock %}</span>
                             <button
                                 class="ux-search-current-refinements__remove"
                                 type="button"

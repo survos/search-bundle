@@ -174,7 +174,7 @@
                             data-live-value-param="{{ key }}"
                         >
                         <label class="ux-search-refinement-list__label" for="{{ property }}-{{ key }}">
-                            <span class="ux-search-refinement-list__label-text" {{ stimulus_target(_rl, 'label') }}>{{ key }}</span>
+                            <span class="ux-search-refinement-list__label-text" {{ stimulus_target(_rl, 'label') }}>{% block item_label %}{{ key }}{% endblock %}</span>
                             <span class="ux-search-refinement-list__count" {{ stimulus_target(_rl, 'count') }}>{{ value }}</span>
                         </label>
                     </li>

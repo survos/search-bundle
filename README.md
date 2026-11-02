@@ -257,3 +257,22 @@ replaces a persisted FTS index on a local writable connection. Install the DuckD
 `fts` extension beforehand. The caller owns staging, transactions, checkpointing
 and publication. Folio-specific DTO projection stays in folio-bundle; this service
 has no folio dependency.
+
+### Doctrine field predicates
+
+`DoctrineAdapter::SEARCH_FIELD_PREDICATE` is an optional closure receiving the
+Doctrine query builder, configured field path and keyword parameter name. Return
+DQL for that field, or `null` to retain ordinary `LIKE` matching. It applies to
+hits, totals and facet counts before pagination. Empty execution queries skip the
+hook, allowing semantic adapters to apply their own candidate predicates.
+BabelBundle installs its locale-aware implementation automatically when present.
+
+## Facet value labels
+
+The default templates display facet values unchanged. For app-specific labels,
+override only `item_label` in `Facet/RefinementList.html.twig` (context: `property`,
+`key`) and `term_label` in `CurrentRefinements.html.twig` (context:
+`active_filter`, `value`). Extend the original template with `@!SurvosSearch/...`
+and use `parent()` for fields that need no customization. These blocks change
+only visible labels; SearchBundle retains the original filter values, counts,
+checkboxes, removal buttons and range-filter rendering.
