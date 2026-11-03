@@ -70,7 +70,7 @@ readonly class QueryBuilderHelper
 
         $qb
             ->select(\sprintf('%s.%s as value, %s AS total', $alias, $property, $this->buildCountExpression($this->getIdentifierField())))
-            ->orderBy('total', 'desc')
+            ->orderBy('total', \SortDirection::Descending)
             ->groupBy(\sprintf('%s.%s', $alias, $property))
             ->setMaxResults($this->search->getResolvedAdapterParameter(DoctrineAdapter::MAX_FACET_VALUES_PARAM));
 
