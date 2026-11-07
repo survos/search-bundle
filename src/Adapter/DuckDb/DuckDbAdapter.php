@@ -182,18 +182,13 @@ final readonly class DuckDbAdapter implements AdapterInterface, \Survos\SearchBu
 
     private function execute(\PDO $db, string $sql, array $parameters, string $dataset): \PDOStatement
     {
-        $start = hrtime(true);
-        $error = null;
-        try {
+        $call = static function () use ($db, $sql, $parameters): \PDOStatement {
             $statement = $db->prepare($sql);
             $statement->execute($parameters);
 
             return $statement;
-        } catch (\Throwable $exception) {
-            $error = $exception->getMessage();
-            throw $exception;
-        } finally {
-            $this->recorder?->record($dataset, $sql, $parameters, (hrtime(true) - $start) / 1e6, $error);
-        }
+        };
+
+        return $this->recorder?->measure($db, $dataset, $sql, $parameters, $call) ?? $call();
     }
 }

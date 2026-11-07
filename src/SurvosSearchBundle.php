@@ -132,7 +132,7 @@ final class SurvosSearchBundle extends AbstractUxBundle
         $services->set(Adapter\DuckDb\DuckDbFactory::class);
         $services->set(Adapter\DuckDb\DuckDbFtsIndexer::class);
         if ($builder->getParameter('kernel.debug')) {
-            $services->set(Profiler\DuckDbQueryRecorder::class);
+            $services->set(Profiler\DuckDbQueryRecorder::class)->arg('$shared', null);
             $services->set(Profiler\DuckDbDataCollector::class)
                 ->tag('data_collector', ['id' => 'survos_duckdb', 'template' => '@SurvosSearch/Profiler/duckdb.html.twig']);
         }
@@ -183,6 +183,7 @@ final class SurvosSearchBundle extends AbstractUxBundle
         $container->addCompilerPass(new AutoEntitySearchPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -10);
         $container->addCompilerPass(new UxSearchAdapterPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -100);
         $container->addCompilerPass(new RegisterSearchPass());
+        $container->addCompilerPass(new DependencyInjection\Compiler\DuckDbProfilerPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, 1000);
         $container->addCompilerPass(new AdapterFactoryPass());
         $container->addCompilerPass(new UrlFormaterPass());
         $this->addRouteLoaderCompilerPass($container);
