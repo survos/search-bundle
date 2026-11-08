@@ -21,6 +21,22 @@ class Query
 
     private string $searchMode = 'lexical';
     private ?float $minimumSimilarity = null;
+    private int $semanticCandidates = 50;
+
+    public function getSemanticCandidates(): int
+    {
+        return $this->semanticCandidates;
+    }
+
+    public function setSemanticCandidates(int $value): static
+    {
+        if ($value < 1 || $value > 1000) {
+            throw new \InvalidArgumentException('Semantic candidates must be between 1 and 1000.');
+        }
+        $this->semanticCandidates = $value;
+
+        return $this;
+    }
 
     public function getSearchMode(): string
     {
@@ -29,7 +45,7 @@ class Query
 
     public function setSearchMode(string $mode): static
     {
-        if (!in_array($mode, ['lexical', 'semantic'], true)) {
+        if (!in_array($mode, ['lexical', 'semantic', 'hybrid'], true)) {
             throw new \InvalidArgumentException('Unknown search mode.');
         }
         $this->searchMode = $mode;

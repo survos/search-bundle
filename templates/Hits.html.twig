@@ -13,7 +13,7 @@
                    row/col wrapper on top of that fights it and leaves narrow cards in a wide gap. #}
                 <div class="ux-search-hits__list">
                     {% for hit in results.hits %}
-                        {% block templated_hit %}{{ include(hitTemplate, {hit: hit.data}) }}{% endblock %}
+                        {% block templated_hit %}{{ include(hitTemplate, {hit: hit.data, score: hit.score, hitMetadata: hit.metadata}) }}{% endblock %}
                     {% endfor %}
                 </div>
             {% else %}

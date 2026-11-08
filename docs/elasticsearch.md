@@ -1,121 +1,194 @@
-# Elasticsearch adapter
+# Elasticsearch: lexical, semantic, and hybrid search
 
-Added 2026-08-15. For the current architecture and rollout decision, read
-[Engine selection and Elasticsearch evaluation](engine-selection.md). The implementation
-has evolved since the notes below: verify indexing commands and vector support against
-the installed engine bundles before following the historical examples.
+This is the consumer integration guide for the current SearchBundle source. The historical
+[engine evaluation](engine-selection.md) records earlier decisions, not the current API.
+KPA exercises these modes locally; that does not establish production readiness for another
+corpus or node configuration. Install a package revision containing
+`SemanticSearchAdapterInterface` and `HybridSearchAdapterInterface` support in the ES adapter.
 
-## Configuration
+## Responsibilities and setup
+
+| Owner | Responsibility |
+|---|---|
+| Consuming app/bundle | Generic Field metadata, document text, embedding provider/profile, durable vector storage, invalidation, search registration, hit template |
+| SearchBundle | Query embeddings via the configured provider, retrieval, scores, facets, pagination, LiveComponent tabs |
+| ElasticBundle | Index mappings/generations, document projection, bulk indexing, alias swaps |
 
 ```yaml
-# config/packages/survos_search.yaml
 survos_search:
-    default_adapter: '%env(SEARCH_ADAPTER)%'
+    default_adapter: es
+    index_prefix: catalog_
     adapters:
-        pg: 'postgres-bm25://default'
         es: '%env(ELASTICSEARCH_DSN)%'
 ```
 
 ```dotenv
-SEARCH_ADAPTER=es
 ELASTICSEARCH_DSN=elasticsearch://127.0.0.1:9200
 ```
 
-`Adapter/Elasticsearch/ElasticsearchFactory` accepts `elasticsearch://`,
-`elasticsearch+https://`, and `elastic://`. Auth comes off the DSN — either
-`elasticsearch+https://user:pass@host` or `?api_key=…`. A node behind a private CA takes `&ca=/path/to/ca.crt`;
-the factory refuses an unreadable path rather than falling back to an unverified connection.
+Named searches may select a different adapter. Supported schemes include `elasticsearch://`,
+`elastic://`, and `elasticsearch+https://`. Authentication comes from the DSN's user/password
+or `api_key` query parameter. `ca=/path/to/ca.crt` selects a private CA; keep credentials out
+of templates and browser state. The official PHP client is `elasticsearch/elasticsearch` 9.x.
 
-**The app default is a fallback; named searches may select another adapter.** Multiple
-engines for distinct datasets are supported by the architecture. Auto-entity override
-wiring still needs verification; see the current decision document for the identified gap.
-SearchBench is the principal integration testcase before the later Folio work.
+## Configure a vector-aware search
 
-## What gets derived automatically
+For `AbstractFieldSearch`, call `parent::build($options)` first, then extend the resulting
+adapter parameters. `FieldSearchConfigurator` reads generic Field descriptors and
+`ElasticParameterTranslator` derives scalar mappings from Doctrine. Add vector mapping
+**after** translation, because translation rebuilds the mappings. A typical extension is:
 
-For an auto-search, `AutoEntitySearch::configureElasticsearchAdapter()` builds the whole ES
-configuration from Doctrine metadata:
-
-| Doctrine | Elasticsearch |
-|---|---|
-| `string`, `text`, `ascii_string` | `text` + a `.keyword` subfield (`ignore_above: 512`) |
-| `integer`, `smallint`, `bigint` | `long` |
-| `float`, `decimal` | `double` |
-| `boolean` | `boolean` |
-| date/datetime types | `date` |
-| table name | index name |
-| single identifier | `idField` |
-
-Facet and sort fields use the `.keyword` subfield for text columns. Which columns become
-facets and sorts comes from the entity's `SEARCHABLE_FIELDS`, `FILTERABLE_FIELDS`, and
-`SORTABLE_FIELDS` class constants (`AutoEntitySearch::applyConstantFields()`). Keep
-`FILTERABLE_FIELDS` to low-cardinality columns — a terms aggregation over a free-text
-column is slow and useless, and the adapter caps results at `maxFacetValues: 100`.
-
-### Multi-valued (array) facets
-
-`json` and `simple_array` columns work as facets on this adapter, with no Search class of
-your own. They map to `keyword`, and Elasticsearch buckets **each element** — so a
-`phpVersions` column holding `["8.2","8.3"]` produces separate `8.2` and `8.3` buckets, and
-a term filter matches a document if any element matches. Indexing already passes arrays
-through intact (`SearchIndexCommand::normalizeValue()` recurses into them).
-
-This is often where the interesting facets live. Just name the column in
-`FILTERABLE_FIELDS`; an explicit declaration is honoured even though undeclared blob
-columns are still left out of auto-discovery.
-
-Multi-valued facets are **Elasticsearch-only** among the current adapters. A DBAL adapter
-(SQLite FTS5, Postgres BM25) would `GROUP BY` the whole serialized array and render
-`["8.2","8.3"]` as one bucket, so `AutoEntitySearch::configureDbalAdapter()` throws instead
-of producing facets that look plausible and are wrong. The plain Doctrine ORM adapter has
-the same limitation but no guard yet. Meilisearch handles arrays natively.
-
-## Indexing
-
-```bash
-bin/console survos:search:index <code> --drop --limit=500   # while the mapping is churning
-bin/console survos:search:index <code>                      # full
+```php
+public function build(array $options = []): void
+{
+    $this->setAdapterParameters([]); // Repeated LiveComponent builds must start clean.
+    parent::build($options);
+    $parameters = $this->getAdapterParameters();
+    $parameters['mappings']['embedding'] = [
+        'type' => 'dense_vector',
+        'dims' => 768, // Must match this consumer's model, not a universal default.
+        'index' => true,
+        'similarity' => 'cosine',
+    ];
+    $parameters['vectorField'] = 'embedding';
+    $parameters['vectorDimensions'] = 768;
+    $parameters['vectorSimilarity'] = 'cosine';
+    $parameters['retrievalMode'] = 'lexical';
+    $parameters['minimumSimilarity'] = 0.35;
+    $parameters['embeddingProvider'] = $this->queryEmbeddings;
+    $parameters['documentMapper'] = $this->documents->map(...);
+    $this->setAdapterParameters($parameters);
+}
 ```
 
-`ElasticsearchAdapter` implements `Contract/IndexingAdapterInterface`, so
-`SearchIndexCommand` calls `ensureIndex()` then `bulkIndex()`.
+This is a method sketch: inject the application's query-embedding and document-projection
+services. Register the search with `#[AsSearch(index: Record::class, name: 'catalog_search',
+adapter: 'es')]` and implement `getFieldClass()` for a field-driven search. Give an explicit
+search a distinct name from auto-generated entity searches; do not assume a duplicate name
+replaces the auto-generated service. Route/render the explicit name you registered.
 
-**Known rough edge:** with no `documentProvider` configured, `externalDocuments()` falls
-back to `$manager->getRepository($class)->findAll()`, which hydrates the entire table into
-memory before bulk-indexing. Fine behind `--limit` while iterating; set a `documentProvider`
-backed by `toIterable()` before running a large corpus.
+The provider implements `Contract\EmbeddingProviderInterface::embed(string): array`, or is
+a callable returning query-vector floats. `queryVector` may instead be a fixed vector or
+callable. PostgreSQL/DuckDB use the separate `QueryEmbedderInterface::embedQuery()` contract;
+implement both methods or bridge them when sharing a provider. They are not interchangeable
+configuration keys. Cosine configuration plus a query provider enables the ES semantic and
+hybrid tabs; this capability check does not verify index coverage or provider availability.
 
-See also [defining-a-search.md](defining-a-search.md) — manual `#[AsSearch]` classes are
-not visible to `survos:search:index` yet, which matters if you back one with Elasticsearch.
+The mapper must return the ordinary indexed document **and** an `embedding` containing the
+valid persisted vector. Do not put vectors or fingerprints in `sourceFields`: that option
+controls returned hit data. For cached vectors, the default document mapper is not enough.
+Validate dimensions, finite values, nonzero norm, and the content/model fingerprint before
+copying a vector. Return `embedding: null` when stale, so an incremental upsert clears an old
+value. Regenerate embeddings separately, then reindex.
 
-## Vectors: not yet
+`embeddingText` is retained as an adapter option but does not generate document embeddings.
+`vectorDimensions` does not create a dense-vector mapping or a Doctrine column. JSON/JSONB
+columns are otherwise opt-in in field-derived ES mappings; do not mark an embedding array
+as a normal searchable/facet field. Keep it out of inferred admin fields as well.
 
-`retrievalMode` defaults to `lexical` and `vectorDimensions` to `null`. Nothing enables
-`dense_vector`, kNN, or hybrid ranking, and no app should turn them on yet.
+Generic fields still drive keyword search and facets. Currently `FieldSearchConfigurator`
+skips descriptors with `visible: false`; explicitly include hidden-but-searchable content
+in the search configuration when needed. Computed properties also need a matching ES mapping
+and document projection. Text facets/sorts normally use `.keyword`; array-valued facets
+need a keyword mapping and scalar array values, not arbitrary JSON objects.
 
-The blocker is cost, not capability. `SearchIndexCommand::externalDocuments()` calls the
-embedding provider inline, once per document, with **no cache** — so every reindex, and
-every mapping change that forces one, re-embeds the whole corpus. The fix is a
-fingerprint-keyed embedding cache (keyed on model + chunker version + normalizer version +
-semantic text) living outside the index lifecycle, so rebuilding an index or switching
-engines reuses vectors. `Contract/EmbeddingProviderInterface` and the
-`embeddingText` / `embeddingProvider` / `documentProvider` adapter parameters are the seams
-it will hook into; the cache itself doesn't exist.
+## Generate once, index repeatedly
 
-## Rollout status
+Use `Search\EmbeddingProfile(model, dimensions, revision, textVersion)` to fingerprint
+normalized source text and its embedding profile. Consumers own generation, storage,
+resume/retry behavior, and query caching. Document and query vectors must share compatible
+models/revisions and preprocessing; model-specific query/document prefixes may differ.
+Equal vector dimensions alone do not establish compatibility.
 
-- **`packages`** — first pilot, and deliberately a playground rather than a commitment. It
-  already has a working `survos/meili-bundle` integration and is a perfectly good candidate
-  to **stay on Meilisearch**; the point of wiring it to Elasticsearch is that it's greenfield
-  for SearchBundle (no `Mezcalito\` legacy, no template overrides), which makes it the
-  cleanest canary for the post-absorption namespace, config root, and component names.
-  Whether ES earns a permanent place there is a separate question, best answered by
-  comparing the two backends on the same corpus.
-- **Production infrastructure** — none yet. Local development uses the shared node in
-  `~/sites/docker/docker-compose.yaml` (Elasticsearch 9.5.0, `single-node`,
-  `xpack.security.enabled=false`, bound to `127.0.0.1:9200`). A production deployment would
-  follow the `~/sites/meilisearch` pattern (Dockerfile as version pin, Dokku app, persistent
-  mounts), with three differences: `vm.max_map_count=262144` is a host-level sysctl Dokku
-  can't set, an unauthenticated node must never get a public domain, and JVM heap plus
-  filesystem cache compete with Postgres on a shared host. Not worth building until
-  something depends on it.
+Persist vectors outside Elasticsearch if reindexing should not call the model. PostgreSQL
+JSONB is one possible cache; PostgreSQL's native pgvector type is appropriate when SQL also
+needs to query vectors. SearchBundle does not migrate one representation into another.
+
+With `survos/elastic-bundle` installed, rebuild a registered search code:
+
+```bash
+# First run the consumer's embedding-generation job (there is no universal command).
+bin/console elastic:index:rebuild <search-code> --keep-old --batch-size=250
+```
+
+This builds a generation and swaps its alias. `survos:search:index` skips external engines.
+ElasticBundle streams Doctrine entities unless an explicit `documentProvider` supplies the
+records. Changing vector dimensions requires a new compatible index and regenerated vectors.
+
+## UI modes versus adapter retrieval defaults
+
+Render the registered search in `Survos:Search:Layout` with `urlRewriting: true` on dedicated
+search pages. Facets are shared across tabs. Keyword input searches as typed; semantic and
+hybrid descriptions run on submission. Merely opening a description tab does not execute it.
+
+| API | Values | Meaning |
+|---|---|---|
+| Adapter `retrievalMode` | `lexical`, `vector`, `hybrid` | Default/explicit low-level retrieval; `vector` is approximate top-k |
+| `Query::searchMode` | `lexical`, `semantic`, `hybrid` | User's submitted tab; non-lexical modes override the adapter default |
+
+Set `retrievalMode: lexical` for an honest Lexical tab. `semantic` is **not** an accepted
+`retrievalMode` value. Programmatic semantic requests use:
+
+```php
+$search = $searchProvider->getSearch('catalog_search')->create();
+$query = $search->createQuery()
+    ->setSearchMode('semantic')
+    ->setQueryString('friendship and belonging')
+    ->setMinimumSimilarity(0.6);
+$results = $searcher->search($query, $search);
+```
+
+For hybrid, call `setSearchMode('hybrid')->setSemanticCandidates(50)`. Add normal term/range
+filters to the same Query. `minimumSimilarity` is cosine in [-1, 1], not a probability.
+ES defaults to 0.35; the UI's candidate limit defaults to 50 and accepts 1–1000. Tune both
+for the corpus. Hybrid's cutoff constrains only its semantic branch, not keyword matches.
+An empty query browses using lexical behavior without calling the embedder.
+
+URL state includes `query`, `searchMode`, `minimumSimilarity`, `semanticCandidates` (hybrid),
+page, page size, sort, and facets. These tabs are for the LiveComponent UI; the separate
+InstantSearch HTTP/browser transport is not automatically upgraded.
+
+## Counts, ranking, scores, and limits
+
+- **Lexical:** keyword relevance, with optional explicit field sorting. Facets exclude
+  their own active filter while retaining text, base scope, and other filters.
+- **Semantic:** exact cosine `script_score`, filtered by its cutoff before pagination and
+  aggregation. Same self-excluding facet behavior. It scans vectors in the base scope;
+  selected facets do not necessarily reduce the scoring workload. Benchmark large corpora.
+  Missing vectors are excluded. Semantic results rank by similarity, not the lexical sort.
+- **Hybrid:** lexical and approximate kNN candidates fused with RRF. The ES adapter tries
+  native RRF, then falls back on the specific RRF license error. Basic-license fallback
+  ranks a bounded candidate union, paginates it, and counts/aggregates that union. Facets
+  remain constrained by active filters; this is not the semantic tab's full-corpus,
+  self-excluding count behavior. Native ES aggregation behavior is engine-defined; do not
+  assume identical totals/facet populations between implementations. The fallback's window
+  is at least `rankWindowSize` (default 100) or the requested semantic candidate count.
+
+Score scales differ: lexical relevance has no fixed probability range; semantic raw score
+is `cosine + 1`; cosine kNN uses ES's vector scoring scale; hybrid is an RRF rank score.
+Do not compare raw scores across modes or label them as confidence percentages.
+Custom hit templates receive `hit`, `score`, and `hitMetadata`, for example:
+
+```twig
+<h3>{{ hit.title }}</h3>
+<p>Score: {{ score|number_format(6) }}</p>
+{% if hitMetadata.mode|default('') == 'semantic' %}
+    <p>Cosine similarity: {{ (score - 1)|number_format(4) }}</p>
+{% endif %}
+```
+
+Backend diagnostics include mode, timings, shard status, and available RRF implementation
+or branch-rank details. Consult [Elastic's script-score documentation](https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-script-score-query)
+for exact cutoff semantics and engine restrictions. No natural-language extraction of
+structured facet values is performed; users select facets explicitly.
+
+## Consumer verification
+
+Before adopting the integration, verify these against the consumer's actual index:
+
+1. Query and document model profiles match, dimensions are correct, and stale vectors are excluded.
+2. A second generation job reuses persisted vectors; an index rebuild does not call the model.
+3. A known keyword and a meaning-based query return expected records with labeled scores.
+4. Raising the semantic cutoff reduces the matching set; selecting a facet narrows it further.
+5. All three tabs, facet changes, URL reloads, and pagination work through live browser requests.
+6. Native or fallback hybrid behavior is identified, and its bounded counts are acceptable.

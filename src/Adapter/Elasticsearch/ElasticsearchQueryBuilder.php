@@ -15,7 +15,7 @@ final readonly class ElasticsearchQueryBuilder
     /** @return array<string, mixed> */
     public function build(Query $query, SearchInterface $search, ?string $forcedMode = null): array
     {
-        $mode = $forcedMode ?? $search->getResolvedAdapterParameter('retrievalMode');
+        $mode = $forcedMode ?? ('lexical' !== $query->getSearchMode() ? $query->getSearchMode() : $search->getResolvedAdapterParameter('retrievalMode'));
         $queryString = trim($query->getQueryString());
         $filters = $this->filters($query, $search);
         // The search's scope within its index (baseFilters): part of the query itself, never the
@@ -27,6 +27,7 @@ final readonly class ElasticsearchQueryBuilder
             'size' => max(1, $query->getActiveHitsPerPage()),
             'from' => max(0, $query->getCurrentPage() - 1) * max(1, $query->getActiveHitsPerPage()),
             'track_total_hits' => true,
+            'track_scores' => true,
         ];
 
         $sourceFields = $search->getResolvedAdapterParameter('sourceFields');
@@ -53,19 +54,37 @@ final readonly class ElasticsearchQueryBuilder
             if ([] !== $sort) {
                 $body['sort'] = $sort;
             }
+        } elseif ('semantic' === $mode) {
+            // Exact cosine cutoff over the eligible corpus, not a truncated kNN candidate set.
+            // Putting min_score inside script_score also filters aggregation collection.
+            $field = $search->getResolvedAdapterParameter('vectorField');
+            $cutoff = $query->getMinimumSimilarity() ?? $search->getResolvedAdapterParameter('minimumSimilarity');
+            $body['query'] = ['script_score' => [
+                'query' => ['bool' => ['filter' => [...$base, ['exists' => ['field' => $field]]]]],
+                'script' => [
+                    'source' => 'cosineSimilarity(params.vector, params.field) + 1.0',
+                    'params' => ['vector' => $this->queryVector($queryString, $search, true), 'field' => $field],
+                ],
+                'min_score' => 1.0 + $cutoff,
+            ]];
+            if ([] !== $filters) {
+                $body['post_filter'] = ['bool' => ['filter' => $filters]];
+            }
+            // Semantic results rank by similarity even when the lexical tab had a column sort.
+            unset($body['highlight']);
         } elseif ('vector' === $mode) {
-            $vector = $this->queryVector($queryString, $search);
-            $body['retriever'] = ['knn' => $this->knn($vector, $search, [...$base, ...$filters])];
+            $vector = $this->queryVector($queryString, $search, 'lexical' !== $query->getSearchMode());
+            $body['retriever'] = ['knn' => $this->knn($vector, $search, [...$base, ...$filters], $query)];
         } else {
-            $vector = $this->queryVector($queryString, $search);
+            $vector = $this->queryVector($queryString, $search, 'lexical' !== $query->getSearchMode());
             $body['retriever'] = [
                 'rrf' => [
                     'retrievers' => [
                         ['standard' => ['query' => $lexical]],
-                        ['knn' => $this->knn($vector, $search, [...$base, ...$filters])],
+                        ['knn' => $this->knn($vector, $search, [...$base, ...$filters], $query)],
                     ],
                     'rank_constant' => $search->getResolvedAdapterParameter('rankConstant'),
-                    'rank_window_size' => $search->getResolvedAdapterParameter('rankWindowSize'),
+                    'rank_window_size' => max($search->getResolvedAdapterParameter('rankWindowSize'), 'hybrid' === $query->getSearchMode() ? $query->getSemanticCandidates() : 0),
                 ],
             ];
         }
@@ -75,7 +94,7 @@ final readonly class ElasticsearchQueryBuilder
             $property = $facet->getProperty();
             $field = $search->getResolvedAdapterParameter('facetFields')[$property] ?? $property;
             $values = ['terms' => ['field' => $field, 'size' => $search->getResolvedAdapterParameter('maxFacetValues')]];
-            $scoped = 'lexical' === $mode || '' === $queryString;
+            $scoped = in_array($mode, ['lexical', 'semantic'], true) || '' === $queryString;
             $aggs[$property] = $scoped
                 ? ['filter' => ['bool' => ['filter' => $this->filters($query, $search, $property)]], 'aggs' => ['values' => $values]]
                 : $values;
@@ -142,9 +161,9 @@ final readonly class ElasticsearchQueryBuilder
     }
 
     /** @return list<float> */
-    private function queryVector(string $query, SearchInterface $search): array
+    private function queryVector(string $query, SearchInterface $search, bool $semantic = false): array
     {
-        if ('' === $query || 'lexical' === $search->getResolvedAdapterParameter('retrievalMode')) {
+        if ('' === $query || (!$semantic && 'lexical' === $search->getResolvedAdapterParameter('retrievalMode'))) {
             return [];
         }
 
@@ -170,7 +189,7 @@ final readonly class ElasticsearchQueryBuilder
      *
      * @return array<string, mixed>
      */
-    private function knn(array $vector, SearchInterface $search, array $filters): array
+    private function knn(array $vector, SearchInterface $search, array $filters, Query $query): array
     {
         $knn = [
             'field' => $search->getResolvedAdapterParameter('vectorField'),
@@ -178,6 +197,11 @@ final readonly class ElasticsearchQueryBuilder
             'k' => $search->getResolvedAdapterParameter('k'),
             'num_candidates' => $search->getResolvedAdapterParameter('numCandidates'),
         ];
+        if ('hybrid' === $query->getSearchMode()) {
+            $knn['k'] = $query->getSemanticCandidates();
+            $knn['num_candidates'] = max($knn['num_candidates'], $knn['k']);
+            $knn['similarity'] = $query->getMinimumSimilarity() ?? $search->getResolvedAdapterParameter('minimumSimilarity');
+        }
         if ([] !== $filters) {
             $knn['filter'] = ['bool' => ['filter' => $filters]];
         }

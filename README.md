@@ -125,38 +125,38 @@ public function build(array $options = []): void
             'description' => ['type' => 'text'],
             'keywords' => ['type' => 'keyword'],
             'searchText' => ['type' => 'text'],
+            'vendor' => ['type' => 'keyword'],
+            'embedding' => ['type' => 'dense_vector', 'dims' => 1536, 'index' => true, 'similarity' => 'cosine'],
         ],
         'retrievalMode' => $options['retrievalMode'] ?? 'lexical',
         'vectorField' => 'embedding',
         'vectorDimensions' => 1536,
         'embeddingProvider' => $this->embeddingProvider,
-        'embeddingText' => static fn (array $document): string =>
-            implode("\n", array_filter([
-                $document['name'] ?? null,
-                $document['description'] ?? null,
-                $document['searchText'] ?? null,
-            ])),
+        // Application service: project catalog fields plus a valid persisted vector.
+        'documentMapper' => $this->documentMapper,
     ]);
 }
 ```
 
-`embeddingProvider` may implement
-`Survos\SearchBundle\Contract\EmbeddingProviderInterface` or be a callable
-that maps text to a list of floats. Applications choose the embedding model;
-SearchBundle only stores and queries the vectors. `queryVector` can instead be
-an explicit vector or callable for experiments and tests.
+`embeddingProvider` implements `Contract\EmbeddingProviderInterface::embed(string): array`
+or is a callable returning a list of floats. It embeds **queries**. The application
+chooses the model and must generate and persist document embeddings separately.
+`queryVector` can instead supply a vector or callable for tests or another query bridge.
+Setting `vectorDimensions` does not create the dense-vector mapping; declare it as above.
+`embeddingText` alone does not generate or cache document vectors.
 
-Create/recreate and bulk-populate registered searches with:
+Install `survos/elastic-bundle` for index lifecycle commands. After generating document
+embeddings, rebuild a registered search into a new generation and swap its alias:
 
 ```bash
-bin/console survos:search:index packages --drop --batch-size=250
-bin/console survos:search:index packages --limit=25
+bin/console elastic:index:rebuild <search-code> --keep-old --batch-size=250
 ```
 
-The command uses an explicit `documentProvider`/`documentMapper` when
-configured. Otherwise, automatic entity searches stream Doctrine records and
-derive JSON-safe documents from their mapped fields. Dates, enums, nested
-arrays, and stringable values are normalized before bulk indexing.
+`survos:search:index` now handles database-native indexes and **skips Elasticsearch**.
+ElasticBundle uses `documentProvider`/`documentMapper` when configured; otherwise it streams
+Doctrine records. A vector-aware mapper must include the stored vector explicitly, exclude
+stale vectors, and return `null` for a stale vector during incremental updates so an old
+index value is cleared. Rebuilding an index should reuse persisted embeddings.
 
 ### Retrieval modes
 
@@ -174,6 +174,67 @@ Every result set exposes backend-neutral diagnostic metadata including engine,
 mode, elapsed Elasticsearch time, shard status, and hybrid implementation.
 Each hit preserves its score plus optional highlight, explanation, index, and
 per-retriever RRF rank details.
+
+## Semantic search: consumer contract
+
+Use the [Elasticsearch integration guide](docs/elasticsearch.md) for mapping, provider,
+indexing, and UI examples; see [database adapters](docs/adapters.md#backend-independent-smart-search)
+for PostgreSQL/pgvector and DuckDB configuration. This documents current source behavior;
+consumers need a package revision containing the semantic/hybrid interfaces and UI.
+
+| Backend | Semantic configuration | Hybrid tab |
+|---|---|---|
+| Elasticsearch | `embeddingProvider` (or `queryVector`), cosine `dense_vector` mapping | Yes |
+| PostgreSQL vector/BM25 | `vectorColumn`, `vectorDimensions`, `queryEmbedder` | No |
+| DuckDB | `vectorColumn`, `vectorDimensions`, `queryEmbedder` | No |
+| Doctrine ORM | Application semantic hook; not enabled by a vector column alone | No |
+
+For Elasticsearch's tabbed UI, keep adapter `retrievalMode: lexical`. The submitted
+`Query::searchMode` selects `lexical`, `semantic`, or `hybrid`. Semantic is an exact
+cosine cutoff search; it is **not** the existing `retrievalMode: vector` top-k search.
+A non-lexical adapter default also changes what the Lexical tab executes.
+
+| Tab | Controls and behavior | Score |
+|---|---|---|
+| Lexical | Live keyword input, field sorting, shared facets | Elasticsearch lexical relevance; not a probability |
+| Semantic | Submitted description, cosine cutoff; full matching set before pagination | Cosine similarity + 1 (subtract 1 to display similarity) |
+| Hybrid | Submitted text, cosine cutoff, semantic candidates (1–1000); shared facets | Reciprocal rank fusion; a different scale |
+
+The Semantic cutoff defaults to **0.35 for Elasticsearch**, versus **0.3 for the SQL
+vector adapters**. Tune it for the model and corpus. The hybrid cutoff applies only to
+the vector branch; keyword matches can still qualify. An empty query browses without
+calling the embedding provider. Selected facets survive tab switches and submissions.
+
+```twig
+<twig:Survos:Search:Layout
+    name="catalog_search"
+    :options="{hitTemplate: 'catalog/search_hit.html.twig'}"
+    :urlRewriting="true"
+/>
+```
+
+The search must be registered under that name. The component provides the tabs when
+its adapter advertises the relevant capability; adding `#[Field]` alone does not enable
+semantic search. Custom hit templates receive `hit`, `score`, and `hitMetadata`.
+URL rewriting persists query, mode, cutoff, hybrid candidate count, pagination, and facets.
+These tabs belong to the server-rendered LiveComponent UI; the separate InstantSearch
+transport does not gain them automatically.
+
+Consumers own document text preparation, model/revision selection, vector generation,
+persistence, and stale-vector invalidation. `Search\EmbeddingProfile` fingerprints the
+text plus model, dimensions, revision, and preprocessing version. Query and document
+vectors must use compatible profiles, including any model-specific query/document prefixes.
+Do not infer compatibility from equal dimensions or regenerate the corpus during reindexing.
+
+JSONB is suitable for a durable vector cache projected into Elasticsearch. Direct SQL
+semantic queries require the adapter's native vector representation (for example pgvector
+in PostgreSQL). A Doctrine field type does not determine Elasticsearch's mapping. Keep
+embedding payloads/fingerprints out of public fields, admin inference, and hit `sourceFields`.
+
+Semantic Elasticsearch search scans eligible vectors; benchmark large datasets. Its facet
+counts retain self-excluding filters and use the same similarity predicate as results.
+Hybrid is a bounded ranking operation: Basic-license fallback totals/facets cover the
+fused candidate union, not every corpus match. See the guide for limits and verification.
 
 ## Folio Direction
 

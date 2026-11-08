@@ -41,6 +41,14 @@ readonly class Searcher
         return (bool) ($search->getResolvedAdapterParameters()['smartSearchAvailable'] ?? false);
     }
 
+    public function supportsHybridSearch(SearchInterface $search): bool
+    {
+        $adapter = $this->adapterProvider->getAdapter($search->getAdapterName());
+
+        return $adapter instanceof \Survos\SearchBundle\Adapter\HybridSearchAdapterInterface
+            && $adapter->supportsHybridSearch($search);
+    }
+
     public function search(Query $query, SearchInterface $search): ResultSet\ResultSet
     {
         $searchEventDispatcher = $search->getEventDispatcher();
@@ -61,6 +69,10 @@ readonly class Searcher
 
         if ('semantic' === $query->getSearchMode() && !$this->supportsSemanticSearch($search)) {
             throw new \LogicException('Smart Search is not available for this dataset and adapter.');
+        }
+
+        if ('hybrid' === $query->getSearchMode() && !$this->supportsHybridSearch($search)) {
+            throw new \LogicException('Hybrid Search is not available for this dataset and adapter.');
         }
 
         $results = $adapter->search($query, $search);

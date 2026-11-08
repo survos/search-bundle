@@ -19,7 +19,9 @@
                                 <p class="small text-muted">Smart Search coverage: {{ coverage.indexed }} of {{ coverage.total }} records have embeddings. Keyword search covers the full collection.</p>
                             {% endif %}
                             <div class="nav nav-tabs mb-3" role="tablist" aria-label="{{ 'mode.label'|trans(domain='survos_search') }}">
-                                {% for mode, label in {lexical: 'mode.instant', semantic: 'mode.smart'} %}
+                                {% set modes = {lexical: 'mode.instant', semantic: 'mode.smart'} %}
+                                {% if this.hybridSearchAvailable %}{% set modes = modes|merge({hybrid: 'mode.hybrid'}) %}{% endif %}
+                                {% for mode, label in modes %}
                                     <button type="button" class="nav-link{{ this.searchTab == mode ? ' active' : '' }}" role="tab"
                                             id="{{ this.searchUiId }}-{{ mode }}-tab" aria-controls="{{ this.searchUiId }}-{{ mode }}-panel"
                                             aria-selected="{{ this.searchTab == mode ? 'true' : 'false' }}" tabindex="{{ this.searchTab == mode ? '0' : '-1' }}"
@@ -34,9 +36,10 @@
                                 <input type="search" class="ux-search-search-input ux-search-input form-control" data-model="debounce(400)|keywordQuery"
                                        value="{{ this.keywordQuery }}" placeholder="{{ 'search.placeholder'|trans(domain='survos_search') }}" aria-label="{{ 'mode.instant'|trans(domain='survos_search') }}">
                             </div>
-                            <div role="tabpanel" id="{{ this.searchUiId }}-semantic-panel" aria-labelledby="{{ this.searchUiId }}-semantic-tab"
-                                 data-search-panel="semantic" {{ stimulus_target(_sc, 'modePanel') }} {{ this.searchTab != 'semantic' ? 'hidden' : '' }}>
-                                <form {{ stimulus_action(_sc, 'submitSmartSearch', 'submit') }}>
+                            {% for mode in this.hybridSearchAvailable ? ['semantic', 'hybrid'] : ['semantic'] %}
+                            <div role="tabpanel" id="{{ this.searchUiId }}-{{ mode }}-panel" aria-labelledby="{{ this.searchUiId }}-{{ mode }}-tab"
+                                 data-search-panel="{{ mode }}" {{ stimulus_target(_sc, 'modePanel') }} {{ this.searchTab != mode ? 'hidden' : '' }}>
+                                <form data-search-mode="{{ mode }}" {{ stimulus_action(_sc, 'submitSmartSearch', 'submit') }}>
                                     <label class="form-label w-100">{{ 'mode.describe'|trans(domain='survos_search') }}
                                         <textarea class="form-control mt-2" name="description" rows="3" required maxlength="2000"
                                                   data-model="norender|smartQuery" placeholder="{{ 'mode.placeholder'|trans(domain='survos_search') }}">{{ this.smartQuery }}</textarea>
@@ -47,14 +50,21 @@
                                         <label class="form-label mt-2">{{ 'mode.similarity'|trans(domain='survos_search') }}
                                             <input type="number" min="-1" max="1" step="0.05" class="form-control" data-model="norender|query.minimumSimilarity" value="{{ query.minimumSimilarity ?? search.resolvedAdapterParameters.minimumSimilarity }}">
                                         </label>
+                                        {% if mode == 'hybrid' %}
+                                            <label class="form-label mt-2">Semantic candidates (1–1000)
+                                                <input type="number" min="1" max="1000" step="1" class="form-control" data-model="norender|query.semanticCandidates" value="{{ query.semanticCandidates }}">
+                                            </label>
+                                            <p class="small text-muted">Combine keyword matches with this many semantic candidates using reciprocal rank fusion. Scores reflect rank agreement.</p>
+                                        {% endif %}
                                     </details>
-                                    <p class="text-danger" {{ stimulus_target(_sc, 'smartError') }} hidden>{{ 'mode.error'|trans(domain='survos_search') }}</p>
+                                    <p data-smart-error class="text-danger" {{ stimulus_target(_sc, 'smartError') }} hidden>{{ 'mode.error'|trans(domain='survos_search') }}</p>
                                     <button type="submit" class="btn btn-primary">{{ 'mode.search'|trans(domain='survos_search') }}</button>
-                                    {% if query.searchMode == 'semantic' %}
+                                    {% if query.searchMode == mode %}
                                         <p class="small mt-2" role="status">{{ 'mode.active'|trans({'%query%': query.queryString}, domain='survos_search') }}</p>
                                     {% endif %}
                                 </form>
                             </div>
+                            {% endfor %}
                         {% else %}
                             <twig:Survos:Search:SearchInput />
                         {% endif %}
@@ -62,7 +72,7 @@
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <twig:Survos:Search:HitsPerPage />
-                    <twig:Survos:Search:SortBy />
+                    {% if query.searchMode == 'lexical' %}<twig:Survos:Search:SortBy />{% else %}<span class="small text-muted">Ranked by relevance</span>{% endif %}
                 </div>
             </div>
 

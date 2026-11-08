@@ -47,27 +47,20 @@ memory.
 
 ## Rule 2: adapters are placed by index ownership
 
-Six adapters ship in this bundle, and they are not interchangeable in kind.
+Query adapters and index-maintenance tools have separate responsibilities:
 
-**Read-only adapters** query an index someone else owns. None of them writes:
-`grep -rn 'addDocuments\|createIndex\|saveObjects\|updateSettings' src/Adapter/{Doctrine,Meilisearch,Algolia}` finds
-nothing. Doctrine queries live tables; Meilisearch and Algolia assume the index was
-populated elsewhere (for us, usually `survos/meili-bundle`).
-
-| | Adapters |
+| Query adapter | Index maintenance |
 |---|---|
-| Read-only over a foreign index | Doctrine, Meilisearch, Algolia |
-| Owns the index lifecycle | SQLite FTS5, Postgres BM25, Elasticsearch |
+| Doctrine ORM | Application migrations and writes |
+| Meilisearch / Algolia | External index owner; their client libraries are optional |
+| Elasticsearch | `survos/elastic-bundle`: create/populate/rebuild and alias management |
+| SQLite FTS5 / PostgreSQL text search | Database-native index configuration and `survos:search:index` where supported |
+| DuckDB | Consumer-owned immutable dataset; optional `DuckDbFtsIndexer` during preparation |
 
-**Index-owning adapters** build and maintain their own storage: Elasticsearch formally,
-through `Contract/IndexingAdapterInterface` (`ensureIndex()` / `bulkIndex()` / `ping()`,
-driven by `Command/SearchIndexCommand`); SQLite FTS5 and Postgres BM25 through
-`Command/SearchCreateCommand` and `Adapter/DbalAdapterTrait`.
-
-**When adding an adapter,** decide which kind it is first. An index-owning adapter must
-implement `IndexingAdapterInterface` (or expose DB-native index parameters that
-`SearchIndexCommand` recognises) or `survos:search:index` will silently skip it with a
-"does not expose DB-native index parameters" note.
+`ElasticsearchAdapter` queries the index; it no longer exposes `ensureIndex()` or
+`bulkIndex()`. `SearchIndexCommand` explicitly skips external indexes. When adding an
+adapter, identify the owner of migrations, index construction, and document updates rather
+than assuming the query adapter or the shared indexing command performs those tasks.
 
 ## See also
 
@@ -76,19 +69,18 @@ implement `IndexingAdapterInterface` (or expose DB-native index parameters that
 - [elasticsearch.md](elasticsearch.md) — configuring the newest adapter
 - [consumer-migration.md](consumer-migration.md) — the outstanding post-absorption work
 
-## Note on embeddings
+## Embedding ownership
 
-`SearchIndexCommand::externalDocuments()` currently calls the embedding provider inline,
-once per document, with no cache — so a full reindex re-embeds the whole corpus. That is
-fine only because nothing enables vectors yet (`retrievalMode` defaults to `lexical` and
-`vectorDimensions` to `null`). Before any app turns vectors on, the fingerprint-keyed
-embedding cache described in the indexing architecture notes needs to land, or every
-mapping change bills the corpus again.
+Consumers generate and persist document vectors, using `Search\EmbeddingProfile` for
+content/model fingerprints. Index rebuilds should copy valid stored vectors rather than
+regenerate them. SearchBundle embeds queries through a configured consumer provider;
+ElasticBundle owns external index lifecycle. See [Elasticsearch integration](elasticsearch.md)
+for the current three-tab UI and the distinct Elasticsearch provider contract.
 
 ## Backend-independent Smart Search
 
-The LiveComponent layout offers Search (existing FTS/text behavior) and Smart
-Search when a DuckDB or PostgreSQL search declares `vectorColumn`, positive `vectorDimensions`,
+The LiveComponent layout offers Lexical and Semantic tabs
+when a DuckDB or PostgreSQL search declares `vectorColumn`, positive `vectorDimensions`,
 and a `queryEmbedder` implementing `QueryEmbedderInterface`. The old
 `DuckDbQueryEmbedderInterface` extends this contract for compatibility. The consuming
 application must only declare these when its selected dataset actually contains
@@ -109,17 +101,17 @@ hits; facets retain their existing self-excluding filter semantics. Pagination
 uses SQL LIMIT/OFFSET after filtering, without an artificial top-K candidate cap.
 An empty query browses the dataset without requesting an embedding.
 
-`Query::searchMode` (`lexical` or `semantic`), `minimumSimilarity`, page size,
+`Query::searchMode` (`lexical`, `semantic`, or capability-gated `hybrid`), `minimumSimilarity`, page size,
 query text, page, and facets survive URL round trips when URL rewriting is on.
 Other adapters and datasets remain lexical by default. This integration is for
 the server-rendered LiveComponent layout; the separate InstantSearch transport
 is unchanged.
 
-Smart Search opens a description dialog and runs only on submission. The separate
+The Semantic tab shows a description form and runs only on submission. The separate
 keyword field remains live as the user types and switches back to lexical mode.
 Both modes retain selected facets. The active smart description is displayed above
 the results; clearing it restores the previous keyword search. Similarity settings
-are available inside the dialog. Natural-language extraction of structured filters
+are available inside the tab. Natural-language extraction of structured filters
 is not implemented yet: a future interpreter should validate its proposed fields
 and values against the search definition and expose applied filters as editable facets.
 
@@ -137,8 +129,10 @@ Adapters advertise availability through `SemanticSearchAdapterInterface`. The
 layout and query embedder contract do not depend on DuckDB. Unsupported adapters
 reject semantic requests instead of silently returning lexical results. Existing
 Doctrine searches using an application semantic hook can retain
-`smartSearchAvailable`. Elasticsearch's legacy retrieval modes are separate;
-its shared Smart Search implementation and Meilisearch support remain future work.
+`smartSearchAvailable`. Elasticsearch now implements the semantic interface and `HybridSearchAdapterInterface`,
+providing three tabs; its configuration and scoring differ from SQL adapters. See the
+[Elasticsearch guide](elasticsearch.md). Other adapters do not gain semantic/hybrid support
+merely because a vector column exists.
 
 Reuse persisted vectors across backends using `EmbeddingProfile`: model,
 dimensions, revision, and text preprocessing version are part of its fingerprint,

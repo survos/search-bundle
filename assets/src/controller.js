@@ -40,12 +40,13 @@ class controller extends Controller {
         if (!description || !form.reportValidity()) return;
         const button = form.querySelector('[type="submit"]');
         button.disabled = true;
-        this.smartErrorTarget.hidden = true;
+        const errorTarget = form.querySelector('[data-smart-error]') ?? this.smartErrorTarget;
+        errorTarget.hidden = true;
         try {
             const component = await getComponent(this.element);
-            await component.action('submitSmartSearch', { description });
+            await component.action('submitSmartSearch', { description, mode: form.dataset.searchMode ?? 'semantic' });
         } catch (error) {
-            this.smartErrorTarget.hidden = false;
+            errorTarget.hidden = false;
         } finally {
             button.disabled = false;
         }

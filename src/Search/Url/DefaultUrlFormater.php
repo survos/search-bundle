@@ -39,8 +39,11 @@ class DefaultUrlFormater implements UrlFormaterInterface
             $params[self::QUERY] = $query->getQueryString();
         }
 
-        if ('semantic' === $query->getSearchMode()) {
-            $params['searchMode'] = 'semantic';
+        if ('lexical' !== $query->getSearchMode()) {
+            $params['searchMode'] = $query->getSearchMode();
+            if ('hybrid' === $query->getSearchMode()) {
+                $params['semanticCandidates'] = $query->getSemanticCandidates();
+            }
         }
         if (null !== $query->getMinimumSimilarity()) {
             $params['minimumSimilarity'] = $query->getMinimumSimilarity();
@@ -75,7 +78,11 @@ class DefaultUrlFormater implements UrlFormaterInterface
     public function applyFilters(CurrentRequest $currentRequest, SearchInterface $search, Query $query): void
     {
         $mode = $currentRequest->parameters['searchMode'] ?? 'lexical';
-        $query->setSearchMode(in_array($mode, ['lexical', 'semantic'], true) ? $mode : 'lexical');
+        $query->setSearchMode(in_array($mode, ['lexical', 'semantic', 'hybrid'], true) ? $mode : 'lexical');
+        $candidates = $currentRequest->parameters['semanticCandidates'] ?? null;
+        if (is_scalar($candidates) && false !== filter_var($candidates, FILTER_VALIDATE_INT) && $candidates >= 1 && $candidates <= 1000) {
+            $query->setSemanticCandidates((int) $candidates);
+        }
         $cutoff = $currentRequest->parameters['minimumSimilarity'] ?? null;
         if (is_numeric($cutoff) && is_finite((float) $cutoff) && $cutoff >= -1 && $cutoff <= 1) {
             $query->setMinimumSimilarity((float) $cutoff);
@@ -150,7 +157,7 @@ class DefaultUrlFormater implements UrlFormaterInterface
      */
     private function getSearchableParameterKeys(SearchInterface $search): array
     {
-        $keys = [self::QUERY, self::PAGE, self::SORT_BY, 'searchMode', 'minimumSimilarity', 'hitsPerPage'];
+        $keys = [self::QUERY, self::PAGE, self::SORT_BY, 'searchMode', 'minimumSimilarity', 'semanticCandidates', 'hitsPerPage'];
         foreach ($search->getFacets() as $facet) {
             $propertyInUrl = str_replace('.', '_', $facet->getProperty());
             $keys[] = $propertyInUrl;

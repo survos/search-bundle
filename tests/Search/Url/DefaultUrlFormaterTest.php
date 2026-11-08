@@ -47,6 +47,15 @@ final class DefaultUrlFormaterTest extends TestCase
         self::assertSame(24, $restored->getActiveHitsPerPage());
         self::assertEquals(1950, $restored->getActiveFilter('year')->getMin());
         self::assertSame(['painting'], $restored->getActiveFilter('kind')->getValues());
+        $restored->setSearchMode('hybrid')->setSemanticCandidates(75);
+        $hybridUrl = $formatter->generateUrl(new CurrentRequest('search', $params), $search, $restored);
+        parse_str(parse_url($hybridUrl, PHP_URL_QUERY), $hybridParams);
+        $hybrid = new Query();
+        $formatter->applyFilters(new CurrentRequest('search', $hybridParams), $search, $hybrid);
+        self::assertSame('hybrid', $hybrid->getSearchMode());
+        self::assertSame(75, $hybrid->getSemanticCandidates());
+        self::assertSame(0.4, $hybrid->getMinimumSimilarity());
+        self::assertSame(['painting'], $hybrid->getActiveFilter('kind')->getValues());
         $restored->setSearchMode('lexical')->setQueryString('');
         $url = $formatter->generateUrl(new CurrentRequest('search', $params), $search, $restored);
         self::assertStringNotContainsString('searchMode=', $url);

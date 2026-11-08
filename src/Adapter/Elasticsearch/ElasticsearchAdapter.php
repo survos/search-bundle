@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Adapter\Elasticsearch;
 
 use Survos\SearchBundle\Adapter\AdapterInterface;
+use Survos\SearchBundle\Adapter\SemanticSearchAdapterInterface;
 use Survos\SearchBundle\Contract\EmbeddingProviderInterface;
 use Survos\SearchBundle\Search\Filter\RangeFilter;
 use Survos\SearchBundle\Search\Filter\TermFilter;
@@ -17,7 +18,7 @@ use Survos\SearchBundle\Search\SearchInterface;
 use Survos\SearchBundle\Service\ElasticIndexNameResolver;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
-final readonly class ElasticsearchAdapter implements AdapterInterface
+final readonly class ElasticsearchAdapter implements AdapterInterface, SemanticSearchAdapterInterface, \Survos\SearchBundle\Adapter\HybridSearchAdapterInterface
 {
     public function __construct(
         private ElasticsearchClientInterface $client,
@@ -53,6 +54,7 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
             'embeddingProvider' => null,
             'queryVector' => null,
             'retrievalMode' => 'lexical',
+            'minimumSimilarity' => 0.35,
             // Meilisearch's typo thresholds: none below 5 characters, one up to 8, two from 9.
             // Plain AUTO allows a typo from 3 characters, so "geo" matched "seo" and "gen".
             'fuzziness' => 'AUTO:5,9',
@@ -78,6 +80,8 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
             'explain' => false,
         ]);
 
+        $resolver->setAllowedTypes('minimumSimilarity', ['int', 'float']);
+        $resolver->setAllowedValues('minimumSimilarity', static fn (int|float $value): bool => is_finite((float) $value) && $value >= -1 && $value <= 1);
         $resolver->setAllowedTypes('index', ['null', 'string']);
         $resolver->setAllowedTypes('sharedIndex', 'bool');
         $resolver->setAllowedTypes('baseFilters', 'array');
@@ -107,13 +111,26 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
         $resolver->setAllowedTypes('explain', 'bool');
     }
 
+    public function supportsSemanticSearch(SearchInterface $search): bool
+    {
+        $parameters = $search->getResolvedAdapterParameters() ?: $search->getAdapterParameters();
+
+        return ($parameters['vectorSimilarity'] ?? 'cosine') === 'cosine'
+            && (($parameters['queryVector'] ?? null) !== null || ($parameters['embeddingProvider'] ?? null) !== null);
+    }
+
+    public function supportsHybridSearch(SearchInterface $search): bool
+    {
+        return $this->supportsSemanticSearch($search);
+    }
+
     public function search(Query $query, SearchInterface $search): ResultSet
     {
         $index = $this->indexName($search);
         try {
             $response = $this->client->search($index, $this->queryBuilder->build($query, $search));
         } catch (\Throwable $exception) {
-            if ('hybrid' === $search->getResolvedAdapterParameter('retrievalMode')
+            if (('hybrid' === $search->getResolvedAdapterParameter('retrievalMode') || 'hybrid' === $query->getSearchMode())
                 && str_contains($exception->getMessage(), 'Reciprocal Rank Fusion (RRF)')) {
                 $response = $this->clientSideRrf($index, $query, $search);
             } else {
@@ -133,7 +150,7 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
                 (float) ($rawHit['_score'] ?? 0.0),
                 array_filter([
                     'engine' => 'elasticsearch',
-                    'mode' => $search->getResolvedAdapterParameter('retrievalMode'),
+                    'mode' => 'lexical' !== $query->getSearchMode() ? $query->getSearchMode() : $search->getResolvedAdapterParameter('retrievalMode'),
                     'index' => $rawHit['_index'] ?? $index,
                     'highlight' => $rawHit['highlight'] ?? null,
                     'explanation' => $rawHit['_explanation'] ?? null,
@@ -157,7 +174,7 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
             ->setFacetStats($stats)
             ->setMetadata([
                 'engine' => 'elasticsearch',
-                'mode' => $search->getResolvedAdapterParameter('retrievalMode'),
+                'mode' => 'lexical' !== $query->getSearchMode() ? $query->getSearchMode() : $search->getResolvedAdapterParameter('retrievalMode'),
                 'took' => (int) ($response['took'] ?? 0),
                 'timedOut' => (bool) ($response['timed_out'] ?? false),
                 'shards' => $response['_shards'] ?? [],
@@ -219,11 +236,12 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
     private function clientSideRrf(string $index, Query $query, SearchInterface $search): array
     {
         $candidateQuery = clone $query;
+        $candidateQuery->setActiveSort(null);
         $candidateQuery
             ->setCurrentPage(1)
             ->setActiveHitsPerPage(max(
                 (int) $search->getResolvedAdapterParameter('rankWindowSize'),
-                $query->getCurrentPage() * $query->getActiveHitsPerPage(),
+                'hybrid' === $query->getSearchMode() ? $query->getSemanticCandidates() : $query->getCurrentPage() * $query->getActiveHitsPerPage(),
             ));
         $lexical = $this->client->search($index, $this->queryBuilder->build($candidateQuery, $search, 'lexical'));
         $vector = $this->client->search($index, $this->queryBuilder->build($candidateQuery, $search, 'vector'));
@@ -253,12 +271,23 @@ final readonly class ElasticsearchAdapter implements AdapterInterface
         $size = max(1, $query->getActiveHitsPerPage());
         $page = max(0, $query->getCurrentPage() - 1);
         $hits = array_slice($fused, $page * $size, $size);
+        $aggregations = [];
+        if ([] !== $search->getFacets()) {
+            // Basic-license RRF still needs facets over the same bounded union as its hits/total.
+            $facetBody = $this->queryBuilder->build((clone $query)->setQueryString(''), $search, 'lexical');
+            $facetBody['query'] = ['ids' => ['values' => array_column($fused, '_id')]];
+            $facetBody['size'] = 0;
+            $facetBody['from'] = 0;
+            unset($facetBody['post_filter'], $facetBody['sort'], $facetBody['highlight']);
+            $aggregations = $this->client->search($index, $facetBody)['aggregations'] ?? [];
+        }
 
         return [
             'took' => (int) ($lexical['took'] ?? 0) + (int) ($vector['took'] ?? 0),
             'timed_out' => (bool) ($lexical['timed_out'] ?? false) || (bool) ($vector['timed_out'] ?? false),
             '_shards' => $lexical['_shards'] ?? $vector['_shards'] ?? [],
             '_search_bundle_hybrid' => 'client_rrf',
+            'aggregations' => $aggregations,
             'hits' => [
                 'total' => ['value' => count($fused), 'relation' => 'eq'],
                 'hits' => $hits,

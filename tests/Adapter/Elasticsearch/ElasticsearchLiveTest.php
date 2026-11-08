@@ -37,14 +37,14 @@ final class ElasticsearchLiveTest extends TestCase
 
         $this->client = new ElasticsearchClient(ClientBuilder::create()->setHosts([$url])->build());
         $adapter = new ElasticsearchAdapter($this->client, new ElasticsearchQueryBuilder());
-        self::assertTrue($adapter->ping());
+        self::assertTrue($this->client->ping());
 
-        $adapter->ensureIndex(self::INDEX, [
+        $this->client->createIndex(self::INDEX, ['properties' => [
             'name' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
             'description' => ['type' => 'text'],
             'embedding' => ['type' => 'dense_vector', 'dims' => 3, 'index' => true, 'similarity' => 'cosine'],
-        ], true);
-        self::assertSame(3, $adapter->bulkIndex(self::INDEX, [
+        ]]);
+        $documents = [
             ['id' => 'rpc', 'document' => [
                 'name' => 'JSON RPC',
                 'description' => 'Remote procedure calls between Symfony services',
@@ -60,7 +60,14 @@ final class ElasticsearchLiveTest extends TestCase
                 'description' => 'Full text indexing and document search',
                 'embedding' => [0.0, 0.0, 1.0],
             ]],
-        ], 2));
+        ];
+        $body = [];
+        foreach ($documents as $item) {
+            $body[] = ['index' => ['_index' => self::INDEX, '_id' => $item['id']]];
+            $body[] = $item['document'];
+        }
+        self::assertFalse($this->client->bulk($body)['errors']);
+        $this->client->refresh(self::INDEX);
 
         $lexical = $adapter->search(
             (new Query())->setQueryString('photo thumbnails')->setActiveHitsPerPage(3),
@@ -88,6 +95,28 @@ final class ElasticsearchLiveTest extends TestCase
         self::assertSame('hybrid', $hybrid->getMetadata()['mode']);
         self::assertSame('client_rrf', $hybrid->getMetadata()['hybridImplementation']);
         self::assertSame('elasticsearch', $hybrid->getHits()[0]->getMetadata()['engine']);
+
+        $semanticSearch = $this->search('lexical');
+        $semanticSearch->addFacet('name', 'Name');
+        $params = $semanticSearch->getResolvedAdapterParameters();
+        $params['facetFields'] = ['name' => 'name.keyword'];
+        $semanticSearch->setResolvedAdapterParameters($params);
+        self::assertTrue($adapter->supportsSemanticSearch($semanticSearch));
+        $query = (new Query())->setQueryString('exchange')->setSearchMode('semantic')->setMinimumSimilarity(0.5);
+        $semantic = $adapter->search($query, $semanticSearch);
+        self::assertSame(1, $semantic->getTotalResults());
+        self::assertSame('rpc', $semantic->getHits()[0]->getData()['_id']);
+        self::assertSame(2.0, $semantic->getHits()[0]->getScore());
+        self::assertSame(['JSON RPC' => 1], $semantic->getFacetDistribution('name')->getValues());
+        $query->addActiveFilter(new \Survos\SearchBundle\Search\Filter\TermFilter('name', ['Image tools']));
+        $filtered = $adapter->search($query, $semanticSearch);
+        self::assertSame(0, $filtered->getTotalResults());
+        self::assertSame(['JSON RPC' => 1], $filtered->getFacetDistribution('name')->getValues(), 'Facet excludes its own selection but respects semantic cutoff.');
+        $tabHybrid = $adapter->search((new Query())->setSearchMode('hybrid')->setQueryString('photo')->setMinimumSimilarity(0.5)->setSemanticCandidates(2), $semanticSearch);
+        self::assertNotEmpty($tabHybrid->getHits());
+        self::assertSame('hybrid', $tabHybrid->getMetadata()['mode']);
+        self::assertSame(2, array_sum($tabHybrid->getFacetDistribution('name')->getValues()));
+        self::assertSame(2, $tabHybrid->getTotalResults());
     }
 
     private function search(string $mode): AbstractSearch

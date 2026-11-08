@@ -105,6 +105,27 @@ final class ElasticsearchQueryBuilderTest extends TestCase
         self::assertSame('election', $must[1]['bool']['must'][0]['dis_max']['queries'][0]['multi_match']['query']);
     }
 
+    public function testSemanticModeOverridesLexicalRetrievalAndUsesCutoff(): void
+    {
+        $query = (new Query())->setSearchMode('semantic')->setQueryString('friends')->setMinimumSimilarity(0.6);
+        $body = (new ElasticsearchQueryBuilder())->build($query, $this->search(['queryVector' => [1.0, 0.0]]));
+        self::assertSame(1.6, $body['query']['script_score']['min_score']);
+        self::assertSame([1.0, 0.0], $body['query']['script_score']['script']['params']['vector']);
+        self::assertArrayNotHasKey('retriever', $body);
+        self::assertArrayNotHasKey('highlight', $body);
+    }
+
+    public function testHybridTabScopesVectorCandidatesWithoutChangingKeywordQuery(): void
+    {
+        $query = (new Query())->setSearchMode('hybrid')->setQueryString('friends')->setMinimumSimilarity(0.6)->setSemanticCandidates(150);
+        $body = (new ElasticsearchQueryBuilder())->build($query, $this->search(['queryVector' => [1.0, 0.0]]));
+        $knn = $body['retriever']['rrf']['retrievers'][1]['knn'];
+        self::assertSame(150, $knn['k']);
+        self::assertSame(150, $knn['num_candidates']);
+        self::assertSame(0.6, $knn['similarity']);
+        self::assertSame(150, $body['retriever']['rrf']['rank_window_size']);
+    }
+
     private function search(array $overrides): SearchInterface
     {
         $parameters = $overrides + [

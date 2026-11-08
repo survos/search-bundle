@@ -40,9 +40,9 @@ class Layout
     use DefaultActionTrait;
 
     #[LiveProp(
-        writable: ['queryString', 'activeSort', 'activeHitsPerPage', 'minimumSimilarity'],
+        writable: ['queryString', 'activeSort', 'activeHitsPerPage', 'minimumSimilarity', 'semanticCandidates'],
         useSerializerForHydration: true,
-        onUpdated: ['queryString' => 'resetCurrentPage', 'activeSort' => 'resetCurrentPage', 'activeHitsPerPage' => 'resetCurrentPage', 'minimumSimilarity' => 'resetCurrentPage']
+        onUpdated: ['queryString' => 'resetCurrentPage', 'activeSort' => 'resetCurrentPage', 'activeHitsPerPage' => 'resetCurrentPage', 'minimumSimilarity' => 'resetCurrentPage', 'semanticCandidates' => 'resetCurrentPage']
     )]
     public ?Query $query = null;
 
@@ -65,15 +65,18 @@ class Layout
     }
 
     #[LiveAction]
-    public function submitSmartSearch(#[LiveArg] string $description): void
+    public function submitSmartSearch(#[LiveArg] string $description, #[LiveArg] string $mode = 'semantic'): void
     {
         $description = trim($description);
         if ('' === $description) {
             return;
         }
-        $this->searchTab = 'semantic';
+        if (!in_array($mode, ['semantic', 'hybrid'], true)) {
+            throw new \InvalidArgumentException('Invalid submitted search mode.');
+        }
+        $this->searchTab = $mode;
         $this->smartQuery = $description;
-        $this->query->setSearchMode('semantic')->setQueryString($description)->setCurrentPage(1);
+        $this->query->setSearchMode($mode)->setQueryString($description)->setCurrentPage(1);
     }
 
     #[LiveAction]
@@ -164,7 +167,7 @@ class Layout
 
         $this->searchUiId = 'ux-search-'.bin2hex(random_bytes(6));
         $this->searchTab = $this->query->getSearchMode();
-        if ('semantic' === $this->searchTab) {
+        if ('lexical' !== $this->searchTab) {
             $this->smartQuery = $this->query->getQueryString();
         }
         if ('lexical' === $this->query->getSearchMode()) {
@@ -187,6 +190,11 @@ class Layout
                 'url' => $this->getUrlFormater()->generateUrl($this->currentRequest, $this->search, $this->query),
             ]);
         }
+    }
+
+    public function getHybridSearchAvailable(): bool
+    {
+        return null !== $this->search && $this->searcher->supportsHybridSearch($this->search);
     }
 
     public function getSmartSearchAvailable(): bool

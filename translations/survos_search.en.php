@@ -13,8 +13,9 @@ declare(strict_types=1);
 
 return [
     'mode.label' => 'Search mode',
-    'mode.instant' => 'Instant Search',
-    'mode.smart' => 'Smart Search',
+    'mode.instant' => 'Lexical',
+    'mode.smart' => 'Semantic',
+    'mode.hybrid' => 'Hybrid',
     'mode.describe' => 'Describe what you are looking for',
     'mode.placeholder' => 'Describe the subjects, themes, or kinds of records you want to find',
     'mode.submit_hint' => 'Press Search when ready. Your selected filters still apply.',
