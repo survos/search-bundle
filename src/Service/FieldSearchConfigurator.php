@@ -52,7 +52,7 @@ final readonly class FieldSearchConfigurator
             if ($descriptor->sortable) {
                 $sortColumns[$descriptor->name] = $this->column($descriptor->name, $columnPrefix);
                 $label = $descriptor->getFallbackLabel();
-                [$ascendingLabel, $descendingLabel] = $this->sortLabels($descriptor, $label);
+                [$ascendingLabel, $descendingLabel] = self::sortLabels($descriptor->type, $label);
                 $search->addAvailableSort($this->column($descriptor->name, $columnPrefix).':asc', $ascendingLabel);
                 $search->addAvailableSort($this->column($descriptor->name, $columnPrefix).':desc', $descendingLabel);
             }
@@ -80,9 +80,9 @@ final readonly class FieldSearchConfigurator
     }
 
     /** @return array{0:string, 1:string} */
-    private function sortLabels(FieldDescriptor $descriptor, string $label): array
+    public static function sortLabels(string $type, string $label): array
     {
-        $type = strtolower(ltrim($descriptor->type, '?\\'));
+        $type = strtolower(ltrim($type, '?\\'));
 
         if (in_array($type, ['int', 'integer', 'bigint', 'smallint', 'float', 'double', 'decimal'], true)) {
             return [$label.' Low-High', $label.' High-Low'];

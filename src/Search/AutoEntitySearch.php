@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Survos\SearchBundle\Search;
 
 use Doctrine\ORM\Mapping\Column;
+use Survos\SearchBundle\Service\FieldSearchConfigurator;
 use Survos\SearchBundle\Service\ParameterTranslatorInterface;
 use Survos\SearchBundle\Twig\Components\Facet\RefinementList;
 use Symfony\Component\String\UnicodeString;
@@ -105,12 +106,19 @@ final class AutoEntitySearch extends AbstractFieldSearch implements HitTemplateS
 
         foreach ($sortable as $field) {
             $label = ucwords(str_replace('_', ' ', (new UnicodeString($field))->snake()->toString()));
+            $type = '';
+            if ($rc->hasProperty($field)) {
+                $property = $rc->getProperty($field);
+                $column = $property->getAttributes(Column::class)[0] ?? null;
+                $type = $column?->newInstance()->type ?? (string) $property->getType();
+            }
+            [$ascendingLabel, $descendingLabel] = FieldSearchConfigurator::sortLabels($type, $label);
             $sortKey = null === $columnPrefix ? $field : $columnPrefix.$field;
             if (!isset($existingSorts["{$sortKey}:asc"])) {
-                $this->addAvailableSort("{$sortKey}:asc", "{$label} A-Z");
+                $this->addAvailableSort("{$sortKey}:asc", $ascendingLabel);
             }
             if (!isset($existingSorts["{$sortKey}:desc"])) {
-                $this->addAvailableSort("{$sortKey}:desc", "{$label} Z-A");
+                $this->addAvailableSort("{$sortKey}:desc", $descendingLabel);
             }
 
             $adapterParameters = $this->getAdapterParameters();
