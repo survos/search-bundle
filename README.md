@@ -337,3 +337,12 @@ override only `item_label` in `Facet/RefinementList.html.twig` (context: `proper
 and use `parent()` for fields that need no customization. These blocks change
 only visible labels; SearchBundle retains the original filter values, counts,
 checkboxes, removal buttons and range-filter rendering.
+
+### Explicit query submission
+
+The `instantsearch` Stimulus controller accepts `searchAsYouType` (Boolean,
+default `true`). Set it to `false` to search on Enter or the visible Search
+button. This uses the InstantSearch search box's native submit behavior;
+filters, pagination, URL state and the reset control remain available.
+Applications with crop previews or other expensive result enrichment should
+consider explicit submission to avoid launching work for intermediate queries.

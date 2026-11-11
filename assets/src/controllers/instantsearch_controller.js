@@ -8,7 +8,7 @@ import { installSymfonyTwigAPI } from '@tacman1123/twig-browser/adapters/symfony
 /** InstantSearch widgets with a Symfony backend and client-rendered Twig hits. */
 export default class extends Controller {
     static targets = ['query', 'hits', 'stats', 'pagination', 'current', 'clear', 'sort', 'facet', 'range', 'error'];
-    static values = { endpoint: String, name: String, template: String, sorts: Array, context: Object, rawJson: { type: Boolean, default: true }, cssClasses: Object, originLinks: { type: Boolean, default: true } };
+    static values = { searchAsYouType: { type: Boolean, default: true }, endpoint: String, name: String, template: String, sorts: Array, context: Object, rawJson: { type: Boolean, default: true }, cssClasses: Object, originLinks: { type: Boolean, default: true } };
 
     async connect() {
         this.disposed = false;
@@ -54,7 +54,7 @@ export default class extends Controller {
             const css = this.cssClassesFor();
             const widgets = [
                 configure({ hitsPerPage: 24 }),
-                searchBox({ container: this.queryTarget, placeholder: 'Search this collection…', showSubmit: false, searchAsYouType: true, showLoadingIndicator: false, cssClasses: css.searchBox }),
+                searchBox({ container: this.queryTarget, placeholder: 'Search this collection…', showSubmit: !this.searchAsYouTypeValue, searchAsYouType: this.searchAsYouTypeValue, showLoadingIndicator: false, templates: { submit: 'Search' }, cssClasses: css.searchBox }),
                 hits({ container: this.hitsTarget, escapeHTML: false, cssClasses: css.hits, templates: {
                     item: (hit) => this.rawJsonButton(hit) + engine.renderBlock('hit', { hit, ...this.contextValue }),
                     empty: '<div class="empty"><p class="empty-title">No matches yet</p><p class="empty-subtitle text-secondary">Try a shorter query or clear a filter.</p></div>',
