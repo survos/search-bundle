@@ -7,7 +7,7 @@
     "require": {
         "php": "^8.5",
         "doctrine/dbal": "^4.3",
-        "doctrine/doctrine-bundle": "^2.14|^3.0",
+        "doctrine/doctrine-bundle": "^3.4",
         "survos/kit-bundle": "^2.5",
         "survos/field-bundle": "^2.5",
         "symfony/config": "^8.1",
