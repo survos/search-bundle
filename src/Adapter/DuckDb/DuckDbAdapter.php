@@ -32,6 +32,8 @@ final readonly class DuckDbAdapter implements AdapterInterface, \Survos\SearchBu
             'listFacets' => [], 'rangeFacets' => [], 'sortColumns' => [],
             'where' => '', 'params' => [], 'textColumns' => [], 'ftsFunction' => '',
             'connectionOptions' => [], 'maxFacetValues' => 100,
+            // Columns read only for the returned page: ['table' => ..., 'idColumn' => ..., 'columns' => [...]].
+            'hydrate' => [],
         ] as $key => $value) {
             $resolver->setDefault($key, $value)->setAllowedTypes($key, get_debug_type($value));
         }
@@ -66,10 +68,23 @@ final readonly class DuckDbAdapter implements AdapterInterface, \Survos\SearchBu
         $order = null !== $sort ? $p['sortColumns'][$sort].', ' : (('semantic' === $query->getSearchMode() || '' !== $p['ftsFunction']) && '' !== trim($query->getQueryString()) ? 'd._duckScore DESC, ' : '');
         $limit = max(1, $query->getActiveHitsPerPage());
         $offset = $limit * max(0, $query->getCurrentPage() - 1);
-        $rows = $this->execute($db, $prefix.'SELECT '.implode(', ', $p['selectColumns']).', d._duckScore AS _score'.$from.' ORDER BY '.$order.$p['idColumn'].' LIMIT '.$limit.' OFFSET '.$offset, $bindings, $dataset)->fetchAll(\PDO::FETCH_ASSOC);
+        $rows = $this->execute($db, $prefix.'SELECT '.implode(', ', $p['selectColumns']).', d._duckScore AS _score, '.$p['idColumn'].' AS _hitId'.$from.' ORDER BY '.$order.$p['idColumn'].' LIMIT '.$limit.' OFFSET '.$offset, $bindings, $dataset)->fetchAll(\PDO::FETCH_ASSOC);
+        if ([] !== $p['hydrate'] && [] !== $rows) {
+            // A wide payload in the ranked query is read for every candidate; reading it by id touches only this page.
+            $h = $p['hydrate'];
+            $ids = array_column($rows, '_hitId');
+            $extra = [];
+            foreach ($this->execute($db, 'SELECT '.$h['idColumn'].' AS _hitId, '.implode(', ', $h['columns']).' FROM '.$h['table'].' WHERE '.$h['idColumn'].' IN ('.implode(', ', array_fill(0, count($ids), '?')).')', $ids, $dataset)->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+                $extra[$row['_hitId']] = $row;
+            }
+            foreach ($rows as &$row) {
+                $row += $extra[$row['_hitId']] ?? [];
+            }
+            unset($row);
+        }
         $hits = array_map(static function (array $row): Hit {
             $score = (float) $row['_score'];
-            unset($row['_score'], $row['_duckScore']);
+            unset($row['_score'], $row['_duckScore'], $row['_hitId']);
 
             return new Hit($row, $score);
         }, $rows);
