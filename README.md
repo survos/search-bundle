@@ -289,6 +289,7 @@ Additional parameters:
 - `textColumns`: literal substring matching when no FTS function is configured.
 - `ftsFunction`: a prebuilt `fts_<schema>_<table>.match_bm25` function. The connection
   must load `fts`; build the index before opening or publishing a read-only dataset.
+- `ftsConjunctive` (default false): require all query terms when using FTS.
 - `maxFacetValues` (default 100): maximum returned terms per facet.
 
 Text and filter values use bound parameters. SQL identifiers and expressions are
@@ -346,3 +347,7 @@ button. This uses the InstantSearch search box's native submit behavior;
 filters, pagination, URL state and the reset control remain available.
 Applications with crop previews or other expensive result enrichment should
 consider explicit submission to avoid launching work for intermediate queries.
+
+An explicit `#[AsSearch(name: ...)]` takes precedence over an automatic entity search
+with the same name. RSun uses this to test its read-only bills snapshot through the
+existing `app_bill` InstantSearch endpoint in dev/test, retaining Elasticsearch in prod.

@@ -76,6 +76,14 @@ final class AutoEntitySearchPass implements CompilerPassInterface
         $entityAdapters = $container->hasParameter('survos_search.entity_adapters')
             ? (array) $container->getParameter('survos_search.entity_adapters')
             : [];
+        $explicitSearches = [];
+        foreach ($container->findTaggedServiceIds('survos_search.search') as $tags) {
+            foreach ($tags as $tag) {
+                if (isset($tag['name'])) {
+                    $explicitSearches[$tag['name']] = true;
+                }
+            }
+        }
         $uxDescriptors = [];
         $newSearches = [];
 
@@ -87,6 +95,11 @@ final class AutoEntitySearchPass implements CompilerPassInterface
             $class = $descriptorDefinition->getArgument('$class');
             $code = $descriptorDefinition->getArgument('$code');
             if (!is_string($class) || !is_string($code) || !class_exists($class)) {
+                continue;
+            }
+
+            // An explicit search owns its configuration, even when its name matches an entity.
+            if (isset($explicitSearches[$code])) {
                 continue;
             }
 

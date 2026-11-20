@@ -106,6 +106,22 @@ final readonly class InstantSearchGateway
                 }
                 $query->addActiveFilter(new RangeFilter($field, $range['min'] ?? null, $range['max'] ?? null));
             }
+            $requestedFacets = $params['facets'] ?? $facets;
+            // InstantSearch sends a single string for disjunctive facet requests.
+            if (is_string($requestedFacets)) {
+                $requestedFacets = [$requestedFacets];
+            }
+            if (!is_array($requestedFacets)) {
+                throw new \InvalidArgumentException('Invalid requested facets.');
+            }
+            foreach ($requestedFacets as $field) {
+                if (!is_string($field) || ('*' !== $field && !in_array($field, $facets, true))) {
+                    throw new \InvalidArgumentException('Unsupported requested facet.');
+                }
+            }
+            if (in_array('*', $requestedFacets, true)) {
+                $requestedFacets = $facets;
+            }
             $started = microtime(true);
             $result = $this->searcher->search($query, $search);
             $hits = [];
@@ -122,11 +138,15 @@ final readonly class InstantSearchGateway
             }
             $distribution = [];
             foreach ($result->getFacetDistributions() as $facet) {
-                $distribution[$facet->getProperty()] = (object) $facet->getValues();
+                if (in_array($facet->getProperty(), $requestedFacets, true)) {
+                    $distribution[$facet->getProperty()] = (object) $facet->getValues();
+                }
             }
             $stats = [];
             foreach ($result->getFacetStats() as $stat) {
-                $stats[$stat->getProperty()] = ['min' => $stat->getMin(), 'max' => $stat->getMax()];
+                if (in_array($stat->getProperty(), $requestedFacets, true)) {
+                    $stats[$stat->getProperty()] = ['min' => $stat->getMin(), 'max' => $stat->getMax()];
+                }
             }
             $total = $result->getTotalResults();
             $results[] = [

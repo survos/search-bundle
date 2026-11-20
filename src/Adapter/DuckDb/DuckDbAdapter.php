@@ -31,7 +31,7 @@ final readonly class DuckDbAdapter implements AdapterInterface, \Survos\SearchBu
             'idColumn' => 'd.id', 'selectColumns' => ['d.*'], 'facetColumns' => [],
             'listFacets' => [], 'rangeFacets' => [], 'sortColumns' => [],
             'where' => '', 'params' => [], 'textColumns' => [], 'ftsFunction' => '',
-            'connectionOptions' => [], 'maxFacetValues' => 100,
+            'connectionOptions' => [], 'maxFacetValues' => 100, 'ftsConjunctive' => false,
             // Columns read only for the returned page: ['table' => ..., 'idColumn' => ..., 'columns' => [...]].
             'hydrate' => [],
         ] as $key => $value) {
@@ -140,7 +140,7 @@ final readonly class DuckDbAdapter implements AdapterInterface, \Survos\SearchBu
                 $bindings[] = $query->getMinimumSimilarity() ?? $p['minimumSimilarity'];
             }
         } elseif ('' !== $text && '' !== $p['ftsFunction']) {
-            $score = $p['ftsFunction'].'('.$p['idColumn'].', ?)';
+            $score = $p['ftsFunction'].'('.$p['idColumn'].', ?'.($p['ftsConjunctive'] ? ', conjunctive := 1' : '').')';
             array_unshift($bindings, $text);
             $predicate = 'd._duckScore IS NOT NULL';
         } elseif ('' !== $text) {

@@ -94,6 +94,23 @@ final class DuckDbAdapterTest extends TestCase
         self::assertSame(['nature' => 2, 'blue' => 1, 'red' => 1], $result->getFacetDistributions()['tags']->getValues());
     }
 
+    public function testConjunctiveFtsRequiresEveryTermWithoutChangingTheDefault(): void
+    {
+        try {
+            $this->db->exec('LOAD fts');
+        } catch (\PDOException) {
+            self::markTestSkipped('Install the optional DuckDB fts extension to run this test.');
+        }
+        $this->db->exec("PRAGMA create_fts_index('works', 'id', 'title')");
+        $query = (new Query())->setQueryString('red tree');
+        $options = ['ftsFunction' => 'fts_main_works.match_bm25'];
+        self::assertSame(3, $this->search($query, $options)->getTotalResults());
+        $result = $this->search($query, $options + ['ftsConjunctive' => true]);
+        self::assertSame(1, $result->getTotalResults());
+        self::assertSame('1', $result->getHits()[0]->getData()['id']);
+        self::assertSame(['painting' => 1], $result->getFacetDistributions()['kind']->getValues());
+    }
+
     public function testProfilerRecordsBoundQueriesErrorsAndResets(): void
     {
         $this->recorder = new \Survos\SearchBundle\Profiler\DuckDbQueryRecorder();
