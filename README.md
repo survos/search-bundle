@@ -351,3 +351,52 @@ consider explicit submission to avoid launching work for intermediate queries.
 An explicit `#[AsSearch(name: ...)]` takes precedence over an automatic entity search
 with the same name. RSun uses this to test its read-only bills snapshot through the
 existing `app_bill` InstantSearch endpoint in dev/test, retaining Elasticsearch in prod.
+
+## API Platform search envelopes (optional)
+
+Install `api-platform/core:^5.0` in the application. SearchBundle registers its
+state provider only when API Platform is available; other consumers do not need it.
+The application owns resource discovery, routes and authentication.
+
+```php
+use ApiPlatform\Metadata\ApiResource;
+use Survos\SearchBundle\ApiPlatform\SearchOperation;
+
+#[ApiResource(operations: [
+    new SearchOperation('/search/books', 'books', security: "is_granted('ROLE_USER')"),
+])]
+final class BookSearchResult {}
+```
+
+The fixed search name must also be in `survos_search.public_searches`. Despite that
+configuration name, operation-level security can further restrict access. No backend
+name, SQL expression, database path or arbitrary search name is accepted from clients.
+This is a GET search envelope, not a Doctrine entity collection or a GraphQL provider.
+
+Inputs: `q`, one-based `page` (default 1), `limit` (default 24, maximum 100), a declared
+`sort` key, `filter[field]=value` or `filter[field][]=value`, and inclusive
+`min[field]` / `max[field]`. Multiple values within a facet use OR; fields use AND.
+The shared gateway enforces the 10,000-result pagination window and query/filter
+validation. Invalid requests return 400 or API Platform's schema-validation 422.
+
+The response contains `search`, `query`, `hits`, `total`, `page`, `limit`, `pages`,
+`facets`, `facetStats` and `processingTimeMs`. Facets cover all matches and exclude
+their own active filter. Empty facet maps serialize as empty arrays. OpenAPI lists
+all inputs and the response DTO. API Platform is an HTTP layer over the existing
+search adapters; it does not add another index or a second engine query.
+
+Searches can implement `HighlightSearchInterface` to opt into safe literal-term
+highlighting on specified result fields when native highlights are absent. Source
+HTML is stripped, entities decoded, and text escaped before inserting `<mark>`.
+This does not emulate engine stemming or fuzzy highlighting. An app with HTML in
+ES source fields can set `highlight: false` to use this consistent fallback.
+
+InstantSearch debounces typed queries by 300 ms (`debounceMs` controller value;
+0 disables it). Initial URL searches, facets and pagination are not delayed.
+Provide a `loading` target with `role="status"` for a visible pending indicator;
+the hits container also receives `aria-busy`.
+
+DuckDB FTS materializes only IDs and scores into a connection-local temporary table
+once per search, reusing them for hits/count/facets and dropping the table in `finally`.
+The published snapshot remains read-only. This avoids repeating BM25 work for every
+facet; it does not introduce a persistent cache or change matching semantics.

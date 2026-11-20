@@ -88,7 +88,10 @@ final class DuckDbAdapterTest extends TestCase
             self::markTestSkipped('Install the optional DuckDB fts extension to run this test.');
         }
         $this->db->exec("PRAGMA create_fts_index('works', 'id', 'title')");
+        $this->recorder = new \Survos\SearchBundle\Profiler\DuckDbQueryRecorder();
         $result = $this->search((new Query())->setQueryString('tree'), ['ftsFunction' => 'fts_main_works.match_bm25']);
+        self::assertCount(1, array_filter($this->recorder->all(), static fn (array $entry): bool => str_contains($entry['sql'], 'match_bm25')));
+        self::assertSame(0, (int) $this->db->query("SELECT count(*) FROM duckdb_tables() WHERE temporary AND table_name LIKE 'search_scores_%'")->fetchColumn());
         self::assertSame(2, $result->getTotalResults());
         self::assertSame(['painting' => 2], $result->getFacetDistributions()['kind']->getValues());
         self::assertSame(['nature' => 2, 'blue' => 1, 'red' => 1], $result->getFacetDistributions()['tags']->getValues());

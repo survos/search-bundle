@@ -3,7 +3,15 @@
     "description": "First-party Symfony search kernel and faceted UX with field-driven Doctrine, Meilisearch, Algolia, SQLite FTS5, PostgreSQL BM25, and Elasticsearch adapters.",
     "type": "symfony-bundle",
     "license": "MIT",
-    "keywords": ["symfony", "symfony-ux", "ux", "search", "facets", "meilisearch", "elasticsearch"],
+    "keywords": [
+        "symfony",
+        "symfony-ux",
+        "ux",
+        "search",
+        "facets",
+        "meilisearch",
+        "elasticsearch"
+    ],
     "require": {
         "php": "^8.5",
         "doctrine/dbal": "^4.3",
@@ -73,6 +81,7 @@
         "elasticsearch/elasticsearch": "Needed for the Elasticsearch adapter. Index creation and population belong in survos/elastic-bundle; this client is only required to query.",
         "meilisearch/meilisearch-php": "Needed for the Meilisearch adapter. Index lifecycle lives in survos/meili-bundle.",
         "algolia/algoliasearch-client-php": "Needed for the Algolia adapter.",
-        "ext-pdo_duckdb": "Native DuckDB PDO driver for local and remote search; FTS requires the DuckDB fts extension."
+        "ext-pdo_duckdb": "Native DuckDB PDO driver for local and remote search; FTS requires the DuckDB fts extension.",
+        "api-platform/core": "^5.0 for the optional read-only search state provider."
     }
 }

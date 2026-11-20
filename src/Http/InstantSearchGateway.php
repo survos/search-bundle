@@ -134,6 +134,16 @@ final readonly class InstantSearchGateway
                 foreach ($hit->getMetadata()['highlight'] ?? [] as $field => $fragments) {
                     $data['_highlightResult'][$field] = ['value' => implode(' … ', $fragments), 'matchLevel' => 'full', 'matchedWords' => []];
                 }
+                if ($search instanceof \Survos\SearchBundle\Search\HighlightSearchInterface) {
+                    foreach ($search->getHighlightFields() as $field) {
+                        if (!isset($data['_highlightResult'][$field]) && is_string($data[$field] ?? null)) {
+                            $highlight = QueryHighlighter::highlight($data[$field], $text);
+                            if (null !== $highlight) {
+                                $data['_highlightResult'][$field] = $highlight;
+                            }
+                        }
+                    }
+                }
                 $hits[] = $data;
             }
             $distribution = [];

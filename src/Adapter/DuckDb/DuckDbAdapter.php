@@ -55,64 +55,82 @@ final readonly class DuckDbAdapter implements AdapterInterface, \Survos\SearchBu
             throw new \InvalidArgumentException('DuckDbAdapter requires native PDO DuckDB.');
         }
         [$prefix, $parameters, $textPredicate] = $this->base($query, $p);
-        [$where, $bindings] = $this->filters($query, $p, $textPredicate, $parameters);
-        $from = ' FROM candidates d'.$where;
-        $total = (int) $this->execute($db, $prefix.'SELECT count(*)'.$from, $bindings, $dataset)->fetchColumn();
-        $sort = $query->getActiveSort();
-        if ('' === $sort) {
-            $sort = null;
-        }
-        if (null !== $sort && !array_key_exists($sort, $p['sortColumns'])) {
-            throw new \InvalidArgumentException('Unknown DuckDB sort: '.$sort);
-        }
-        $order = null !== $sort ? $p['sortColumns'][$sort].', ' : (('semantic' === $query->getSearchMode() || '' !== $p['ftsFunction']) && '' !== trim($query->getQueryString()) ? 'd._duckScore DESC, ' : '');
-        $limit = max(1, $query->getActiveHitsPerPage());
-        $offset = $limit * max(0, $query->getCurrentPage() - 1);
-        $rows = $this->execute($db, $prefix.'SELECT '.implode(', ', $p['selectColumns']).', d._duckScore AS _score, '.$p['idColumn'].' AS _hitId'.$from.' ORDER BY '.$order.$p['idColumn'].' LIMIT '.$limit.' OFFSET '.$offset, $bindings, $dataset)->fetchAll(\PDO::FETCH_ASSOC);
-        if ([] !== $p['hydrate'] && [] !== $rows) {
-            // A wide payload in the ranked query is read for every candidate; reading it by id touches only this page.
-            $h = $p['hydrate'];
-            $ids = array_column($rows, '_hitId');
-            $extra = [];
-            foreach ($this->execute($db, 'SELECT '.$h['idColumn'].' AS _hitId, '.implode(', ', $h['columns']).' FROM '.$h['table'].' WHERE '.$h['idColumn'].' IN ('.implode(', ', array_fill(0, count($ids), '?')).')', $ids, $dataset)->fetchAll(\PDO::FETCH_ASSOC) as $row) {
-                $extra[$row['_hitId']] = $row;
+        $temporary = null;
+        try {
+            if ('lexical' === $query->getSearchMode() && '' !== trim($query->getQueryString()) && '' !== $p['ftsFunction']) {
+                // Keep only IDs and scores: wide text/JSON stays in the read-only source.
+                $temporary = 'search_scores_'.bin2hex(random_bytes(8));
+                $this->execute($db, 'CREATE TEMP TABLE '.$temporary.' AS '.$prefix
+                    .'SELECT '.$p['idColumn'].' AS _duckId, d._duckScore FROM candidates d WHERE '.$textPredicate,
+                    $parameters, $dataset);
+                $prefix = 'WITH candidates AS (SELECT d.*, s._duckScore FROM '.$p['table'].' d JOIN '.$temporary
+                    .' s ON '.$p['idColumn'].' = s._duckId'.('' !== $p['where'] ? ' WHERE '.$p['where'] : '').') ';
+                $parameters = $p['params'];
+                $textPredicate = '';
             }
-            foreach ($rows as &$row) {
-                $row += $extra[$row['_hitId']] ?? [];
+            [$where, $bindings] = $this->filters($query, $p, $textPredicate, $parameters);
+            $from = ' FROM candidates d'.$where;
+            $total = (int) $this->execute($db, $prefix.'SELECT count(*)'.$from, $bindings, $dataset)->fetchColumn();
+            $sort = $query->getActiveSort();
+            if ('' === $sort) {
+                $sort = null;
             }
-            unset($row);
-        }
-        $hits = array_map(static function (array $row): Hit {
-            $score = (float) $row['_score'];
-            unset($row['_score'], $row['_duckScore'], $row['_hitId']);
-
-            return new Hit($row, $score);
-        }, $rows);
-        $distributions = $stats = [];
-        foreach ($search->getFacets() as $facet) {
-            $name = $facet->getProperty();
-            $column = $this->column($p, $name);
-            [$facetWhere, $facetBindings] = $this->filters($query, $p, $textPredicate, $parameters, $name);
-            $filter = $query->getActiveFilter($name);
-            if (in_array($name, $p['rangeFacets'], true)) {
-                $range = $this->execute($db, $prefix.'SELECT min('.$column.') AS lo, max('.$column.') AS hi FROM candidates d'.$facetWhere, $facetBindings, $dataset)->fetch(\PDO::FETCH_ASSOC);
-                if (null !== $range['lo']) {
-                    $stats[$name] = new FacetStat($name, $range['lo'], $range['hi'], $filter instanceof RangeFilter ? $filter->getMin() : null, $filter instanceof RangeFilter ? $filter->getMax() : null);
+            if (null !== $sort && !array_key_exists($sort, $p['sortColumns'])) {
+                throw new \InvalidArgumentException('Unknown DuckDB sort: '.$sort);
+            }
+            $order = null !== $sort ? $p['sortColumns'][$sort].', ' : (('semantic' === $query->getSearchMode() || '' !== $p['ftsFunction']) && '' !== trim($query->getQueryString()) ? 'd._duckScore DESC, ' : '');
+            $limit = max(1, $query->getActiveHitsPerPage());
+            $offset = $limit * max(0, $query->getCurrentPage() - 1);
+            $rows = $this->execute($db, $prefix.'SELECT '.implode(', ', $p['selectColumns']).', d._duckScore AS _score, '.$p['idColumn'].' AS _hitId'.$from.' ORDER BY '.$order.$p['idColumn'].' LIMIT '.$limit.' OFFSET '.$offset, $bindings, $dataset)->fetchAll(\PDO::FETCH_ASSOC);
+            if ([] !== $p['hydrate'] && [] !== $rows) {
+                // A wide payload in the ranked query is read for every candidate; reading it by id touches only this page.
+                $h = $p['hydrate'];
+                $ids = array_column($rows, '_hitId');
+                $extra = [];
+                foreach ($this->execute($db, 'SELECT '.$h['idColumn'].' AS _hitId, '.implode(', ', $h['columns']).' FROM '.$h['table'].' WHERE '.$h['idColumn'].' IN ('.implode(', ', array_fill(0, count($ids), '?')).')', $ids, $dataset)->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+                    $extra[$row['_hitId']] = $row;
                 }
-                $values = [];
-            } else {
-                $expression = in_array($name, $p['listFacets'], true) ? 'unnest('.$column.')' : $column;
-                // COUNT DISTINCT prevents duplicate list members from counting a document twice.
-                $sql = $prefix.'SELECT value, count(DISTINCT record_id) AS total FROM (SELECT '.$p['idColumn'].' AS record_id, '.$expression.' AS value FROM candidates d'.$facetWhere.') f WHERE value IS NOT NULL GROUP BY value ORDER BY total DESC, value LIMIT '.$p['maxFacetValues'];
-                $values = [];
-                foreach ($this->execute($db, $sql, $facetBindings, $dataset)->fetchAll(\PDO::FETCH_ASSOC) as $row) {
-                    $values[$row['value']] = (int) $row['total'];
+                foreach ($rows as &$row) {
+                    $row += $extra[$row['_hitId']] ?? [];
                 }
+                unset($row);
             }
-            $distributions[$name] = (new FacetTermDistribution())->setProperty($name)->setValues($values)->setCheckedValues($filter instanceof TermFilter ? $filter->getValues() : []);
-        }
+            $hits = array_map(static function (array $row): Hit {
+                $score = (float) $row['_score'];
+                unset($row['_score'], $row['_duckScore'], $row['_hitId']);
 
-        return (new ResultSet())->setIndexUid($search->getIndexName())->setHits($hits)->setTotalResults($total)->setFacetDistributions($distributions)->setFacetStats($stats);
+                return new Hit($row, $score);
+            }, $rows);
+            $distributions = $stats = [];
+            foreach ($search->getFacets() as $facet) {
+                $name = $facet->getProperty();
+                $column = $this->column($p, $name);
+                [$facetWhere, $facetBindings] = $this->filters($query, $p, $textPredicate, $parameters, $name);
+                $filter = $query->getActiveFilter($name);
+                if (in_array($name, $p['rangeFacets'], true)) {
+                    $range = $this->execute($db, $prefix.'SELECT min('.$column.') AS lo, max('.$column.') AS hi FROM candidates d'.$facetWhere, $facetBindings, $dataset)->fetch(\PDO::FETCH_ASSOC);
+                    if (null !== $range['lo']) {
+                        $stats[$name] = new FacetStat($name, $range['lo'], $range['hi'], $filter instanceof RangeFilter ? $filter->getMin() : null, $filter instanceof RangeFilter ? $filter->getMax() : null);
+                    }
+                    $values = [];
+                } else {
+                    $expression = in_array($name, $p['listFacets'], true) ? 'unnest('.$column.')' : $column;
+                    // COUNT DISTINCT prevents duplicate list members from counting a document twice.
+                    $sql = $prefix.'SELECT value, count(DISTINCT record_id) AS total FROM (SELECT '.$p['idColumn'].' AS record_id, '.$expression.' AS value FROM candidates d'.$facetWhere.') f WHERE value IS NOT NULL GROUP BY value ORDER BY total DESC, value LIMIT '.$p['maxFacetValues'];
+                    $values = [];
+                    foreach ($this->execute($db, $sql, $facetBindings, $dataset)->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+                        $values[$row['value']] = (int) $row['total'];
+                    }
+                }
+                $distributions[$name] = (new FacetTermDistribution())->setProperty($name)->setValues($values)->setCheckedValues($filter instanceof TermFilter ? $filter->getValues() : []);
+            }
+
+            return (new ResultSet())->setIndexUid($search->getIndexName())->setHits($hits)->setTotalResults($total)->setFacetDistributions($distributions)->setFacetStats($stats);
+        } finally {
+            if (null !== $temporary) {
+                $db->exec('DROP TABLE IF EXISTS '.$temporary);
+            }
+        }
     }
 
     private function base(Query $query, array $p): array

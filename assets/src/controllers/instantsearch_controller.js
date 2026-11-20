@@ -7,11 +7,12 @@ import { installSymfonyTwigAPI } from '@tacman1123/twig-browser/adapters/symfony
 
 /** InstantSearch widgets with a Symfony backend and client-rendered Twig hits. */
 export default class extends Controller {
-    static targets = ['query', 'hits', 'stats', 'pagination', 'current', 'clear', 'sort', 'facet', 'range', 'error'];
-    static values = { searchAsYouType: { type: Boolean, default: true }, endpoint: String, name: String, template: String, sorts: Array, context: Object, rawJson: { type: Boolean, default: true }, cssClasses: Object, originLinks: { type: Boolean, default: true } };
+    static targets = ['query', 'hits', 'stats', 'pagination', 'current', 'clear', 'sort', 'facet', 'range', 'error', 'loading'];
+    static values = { debounceMs: { type: Number, default: 300 }, searchAsYouType: { type: Boolean, default: true }, endpoint: String, name: String, template: String, sorts: Array, context: Object, rawJson: { type: Boolean, default: true }, cssClasses: Object, originLinks: { type: Boolean, default: true } };
 
     async connect() {
         this.disposed = false;
+        this.pendingSearches = 0;
         // objectID -> hit as returned by the endpoint, for the {} raw-document dialog.
         this.rawHits = new Map();
         if (this.rawJsonValue) this.installRawJsonDialog();
@@ -32,14 +33,21 @@ export default class extends Controller {
             engine.compileBlock('hit', source);
             const searchClient = {
                 search: async (requests) => {
-                    const res = await fetch(this.endpointValue, {
-                        method: 'POST', credentials: 'same-origin',
-                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                        body: JSON.stringify({ requests }),
-                    });
-                    if (!res.ok) throw new Error('Search is temporarily unavailable. Please try again.');
-                    this.errorTarget.hidden = true;
-                    return res.json();
+                    this.pendingSearches++;
+                    this.updateLoading();
+                    try {
+                        const res = await fetch(this.endpointValue, {
+                            method: 'POST', credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                            body: JSON.stringify({ requests }),
+                        });
+                        if (!res.ok) throw new Error('Search is temporarily unavailable. Please try again.');
+                        this.errorTarget.hidden = true;
+                        return await res.json();
+                    } finally {
+                        this.pendingSearches--;
+                        this.updateLoading();
+                    }
                 },
             };
             this.search = instantsearch({ indexName: this.nameValue, searchClient, routing: true, insights: false });
@@ -54,7 +62,11 @@ export default class extends Controller {
             const css = this.cssClassesFor();
             const widgets = [
                 configure({ hitsPerPage: 24 }),
-                searchBox({ container: this.queryTarget, placeholder: 'Search this collection…', showSubmit: !this.searchAsYouTypeValue, searchAsYouType: this.searchAsYouTypeValue, showLoadingIndicator: false, templates: { submit: 'Search' }, cssClasses: css.searchBox }),
+                searchBox({ queryHook: (query, search) => {
+                    clearTimeout(this.queryTimer);
+                    if (!this.searchAsYouTypeValue || !query || this.debounceMsValue <= 0) { search(query); return; }
+                    this.queryTimer = setTimeout(() => { if (!this.disposed) search(query); }, Math.min(this.debounceMsValue, 2000));
+                }, container: this.queryTarget, placeholder: 'Search this collection…', showSubmit: !this.searchAsYouTypeValue, searchAsYouType: this.searchAsYouTypeValue, showLoadingIndicator: true, templates: { submit: 'Search' }, cssClasses: css.searchBox }),
                 hits({ container: this.hitsTarget, escapeHTML: false, cssClasses: css.hits, templates: {
                     item: (hit) => this.rawJsonButton(hit) + engine.renderBlock('hit', { hit, ...this.contextValue }),
                     empty: '<div class="empty"><p class="empty-title">No matches yet</p><p class="empty-subtitle text-secondary">Try a shorter query or clear a filter.</p></div>',
@@ -78,6 +90,17 @@ export default class extends Controller {
             this.search.addWidgets(widgets);
             this.search.start();
         } catch (error) { this.showError(error); }
+    }
+
+    updateLoading() {
+        const loading = this.pendingSearches > 0;
+        this.hitsTarget.setAttribute('aria-busy', String(loading));
+        if (this.hasLoadingTarget) {
+            this.loadingTarget.hidden = !loading;
+            this.hitsTarget.hidden = loading;
+            if (this.hasPaginationTarget) this.paginationTarget.hidden = loading;
+            if (this.hasStatsTarget) this.statsTarget.hidden = loading;
+        }
     }
 
     /**
@@ -189,6 +212,7 @@ export default class extends Controller {
     }
 
     disconnect() {
+        clearTimeout(this.queryTimer);
         this.disposed = true;
         this.search?.dispose();
         if (this.onRawJsonClick) this.element.removeEventListener('click', this.onRawJsonClick);

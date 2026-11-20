@@ -137,6 +137,9 @@ final class SurvosSearchBundle extends AbstractUxBundle
                 ->tag('data_collector', ['id' => 'survos_duckdb', 'template' => '@SurvosSearch/Profiler/duckdb.html.twig']);
         }
         $services->set(Http\InstantSearchGateway::class)->arg('$allowedSearches', $config['public_searches']);
+        if (interface_exists(\ApiPlatform\State\ProviderInterface::class)) {
+            $services->set(ApiPlatform\SearchStateProvider::class);
+        }
         $services->set(Controller\InstantSearchController::class)->tag('controller.service_arguments');
         $services
             ->set(FieldSearchConfigurator::class)
